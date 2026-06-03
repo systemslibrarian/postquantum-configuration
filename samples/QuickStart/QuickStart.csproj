@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PostQuantum.Configuration.Samples.QuickStart</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Samples favour clarity over the last drop of perf: keep interface-typed locals (CA1859). -->
+    <NoWarn>$(NoWarn);CS1591;CA1859</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <!-- A real app installs the NuGet package; the sample references the project in-repo. -->
+    <ProjectReference Include="..\..\src\PostQuantum.Configuration\PostQuantum.Configuration.csproj" />
+  </ItemGroup>
+
+</Project>

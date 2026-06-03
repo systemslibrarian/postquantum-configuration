@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>PostQuantum.Configuration</RootNamespace>
+    <AssemblyName>PostQuantum.Configuration</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Public surface exposes string tokens only — no raw byte[] — so the assembly is CLS compliant. -->
+    <CLSCompliant>true</CLSCompliant>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>PostQuantum.Configuration</PackageId>
+    <Version>0.2.0-preview.1</Version>
+    <Title>PostQuantum.Configuration — encrypted configuration &amp; secrets for .NET</Title>
+    <Description>Secure-by-default encryption for sensitive configuration values — connection strings, API keys, and whole appsettings sections — for .NET. Builds on PostQuantum.KeyManagement's envelope-encryption engine: each value is sealed with a fresh 256-bit content key under AES-256-GCM, the content key is wrapped by a key-encryption key, and protected values carry a compact, versioned, hostile-input-resistant token. A transparent Microsoft.Extensions.Configuration layer decrypts tokens on read, so application code reads plaintext while the repository and appsettings only ever hold ciphertext. Includes an optional HYBRID POST-QUANTUM key-wrapping provider (ML-KEM-768 + ECDH P-256, FIPS 203, .NET 10+), a zeroable Secret return type, key-rotation re-seal helpers, and the pqc-config CLI. The default symmetric layer (AES-256-GCM + Argon2id) gives ~128-bit post-quantum strength under Grover; the hybrid provider adds post-quantum asymmetric key exchange. See KNOWN-GAPS.md and docs/threat-model.md for the honest, explicit scope. The natural companion to PostQuantum.KeyManagement and PostQuantum.Jwt.</Description>
+    <PackageTags>post-quantum;pqc;ml-kem;configuration;appsettings;secrets;secrets-management;connection-strings;encryption;aes-gcm;argon2id;envelope-encryption;aspnetcore;dependency-injection;security</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-configuration</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/systemslibrarian/postquantum-configuration</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>0.2.0-preview.1: Closes the 0.1 roadmap. Adds (1) an optional HYBRID post-quantum key-wrapping provider — HybridKemContentKeyProvider — that wraps each content key with ML-KEM-768 (FIPS 203) AND ECDH P-256 combined through HKDF-SHA256 + AES-256-GCM (native BCL primitives; .NET 10+ where ML-KEM is available); (2) a zeroable Secret return type and UnprotectToSecret to avoid lingering plaintext strings; (3) Reprotect / ReprotectAllAsync re-seal helpers for key rotation; (4) the pqc-config dotnet CLI (separate package). Honest scope: the hybrid construction uses standard primitives but is NOT a named standard and is NOT independently audited; the default (non-hybrid) provider remains symmetric-only. Treat the API and token format as unstable until 1.0. See CHANGELOG.md and KNOWN-GAPS.md.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PostQuantum.KeyManagement" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- Ship the README inside the package so it renders on the NuGet.org listing. -->
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PostQuantum.Configuration.Tests" />
+  </ItemGroup>
+
+</Project>

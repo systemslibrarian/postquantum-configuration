@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>PostQuantum.Configuration.Tool</RootNamespace>
+    <AssemblyName>pqc-config</AssemblyName>
+
+    <!-- Ship as a dotnet global/local tool (installable via `dotnet tool install`). -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>pqc-config</ToolCommandName>
+    <RollForward>Major</RollForward>
+
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CA1859;CA1861</NoWarn>
+  </PropertyGroup>
+
+  <!-- NuGet metadata for the tool package. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>PostQuantum.Configuration.Tool</PackageId>
+    <Version>0.2.0-preview.1</Version>
+    <Title>pqc-config — CLI for PostQuantum.Configuration</Title>
+    <Description>Command-line companion to PostQuantum.Configuration. Seal (protect), open (unprotect), and rotate keys for encrypted configuration values from a shell or CI pipeline, backed by a persisted PostQuantum.KeyManagement keyring. Read values from stdin to keep secrets out of shell history. See the PostQuantum.Configuration package for the library.</Description>
+    <PackageTags>post-quantum;pqc;configuration;secrets;cli;dotnet-tool;encryption;aes-gcm</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-configuration</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/systemslibrarian/postquantum-configuration</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PostQuantum.Configuration\PostQuantum.Configuration.csproj" />
+    <PackageReference Include="PostQuantum.KeyManagement" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
