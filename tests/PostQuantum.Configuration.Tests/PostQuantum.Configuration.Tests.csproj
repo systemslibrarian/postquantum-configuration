@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PostQuantum.Configuration\PostQuantum.Configuration.csproj" />
+    <ProjectReference Include="..\..\src\PostQuantum.Configuration.Tool\PostQuantum.Configuration.Tool.csproj" />
   </ItemGroup>
 
 </Project>

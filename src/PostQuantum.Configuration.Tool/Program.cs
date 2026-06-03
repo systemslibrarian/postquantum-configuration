@@ -186,6 +186,10 @@ internal static class Program
               --token <text>          Token to unprotect. If omitted, read from stdin.
               --context <text>        Optional context bound into the token (swap resistance).
 
+            Use --option=value (with '=') for any value that starts with '-', e.g.
+            --value=--my-secret, otherwise it is mistaken for the next option. Piping the
+            value on stdin avoids the issue entirely and keeps it out of your shell history.
+
             EXAMPLES
               export PQC_PASSPHRASE='a strong passphrase'
               echo 'Host=db;Password=s3cr3t' | pqc-config protect --keyring keyring.txt
@@ -217,7 +221,19 @@ internal sealed class ArgMap
                 throw new CliError($"Unexpected argument '{arg}'. Options must start with '--'.");
             }
 
-            string key = arg[2..];
+            string body = arg[2..];
+
+            // `--key=value` binds the value inline. This is the unambiguous form and the only way to pass
+            // a value that itself starts with '-' (e.g. a secret like `--passw0rd`): the space-separated
+            // form below can't tell such a value from the next flag.
+            int eq = body.IndexOf('=', StringComparison.Ordinal);
+            if (eq >= 0)
+            {
+                map._values[body[..eq]] = body[(eq + 1)..];
+                continue;
+            }
+
+            string key = body;
             if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
             {
                 map._values[key] = args[++i];

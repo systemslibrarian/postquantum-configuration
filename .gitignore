@@ -41,3 +41,4 @@ appsettings.*.Secrets.json
 # NuGet API key — never commit
 nuget.key
 *.key
+gemininbugsfound.md

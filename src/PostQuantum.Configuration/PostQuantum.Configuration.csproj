@@ -13,7 +13,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>PostQuantum.Configuration</PackageId>
-    <Version>0.2.0-preview.1</Version>
+    <Version>0.2.0-preview.2</Version>
     <Title>PostQuantum.Configuration — encrypted configuration &amp; secrets for .NET</Title>
     <Description>Secure-by-default encryption for sensitive configuration values — connection strings, API keys, and whole appsettings sections — for .NET. Builds on PostQuantum.KeyManagement's envelope-encryption engine: each value is sealed with a fresh 256-bit content key under AES-256-GCM, the content key is wrapped by a key-encryption key, and protected values carry a compact, versioned, hostile-input-resistant token. A transparent Microsoft.Extensions.Configuration layer decrypts tokens on read, so application code reads plaintext while the repository and appsettings only ever hold ciphertext. Includes an optional HYBRID POST-QUANTUM key-wrapping provider (ML-KEM-768 + ECDH P-256, FIPS 203, .NET 10+), a zeroable Secret return type, key-rotation re-seal helpers, and the pqc-config CLI. The default symmetric layer (AES-256-GCM + Argon2id) gives ~128-bit post-quantum strength under Grover; the hybrid provider adds post-quantum asymmetric key exchange. See KNOWN-GAPS.md and docs/threat-model.md for the honest, explicit scope. The natural companion to PostQuantum.KeyManagement and PostQuantum.Jwt.</Description>
     <PackageTags>post-quantum;pqc;ml-kem;configuration;appsettings;secrets;secrets-management;connection-strings;encryption;aes-gcm;argon2id;envelope-encryption;aspnetcore;dependency-injection;security</PackageTags>

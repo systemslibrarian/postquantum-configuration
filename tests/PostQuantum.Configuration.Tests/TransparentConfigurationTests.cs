@@ -117,6 +117,30 @@ public sealed class TransparentConfigurationTests
     }
 
     [Fact]
+    public void Overwriting_a_cached_key_through_Set_is_reflected_on_the_next_read()
+    {
+        var (protector, provider) = TestKeys.NewProtector();
+        using (provider)
+        {
+            IConfigurationRoot config = new ConfigurationBuilder()
+                .AddEncrypted(
+                    MemorySource(new Dictionary<string, string?> { ["Key"] = protector.Protect("first") }),
+                    protector)
+                .Build();
+
+            Assert.Equal("first", config["Key"]); // first read memoises the decryption
+
+            // Overwrite with a token for a different plaintext; the stale cache must not win.
+            config["Key"] = protector.Protect("second");
+            Assert.Equal("second", config["Key"]);
+
+            // Overwriting with a plaintext value must also take effect (and pass straight through).
+            config["Key"] = "now plaintext";
+            Assert.Equal("now plaintext", config["Key"]);
+        }
+    }
+
+    [Fact]
     public void BindKeyAsContext_decrypts_when_the_value_was_sealed_with_its_key()
     {
         var (protector, provider) = TestKeys.NewProtector();

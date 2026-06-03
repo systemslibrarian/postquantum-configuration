@@ -78,6 +78,32 @@ public sealed class ReprotectTests
     }
 
     [Fact]
+    public async Task ReprotectAllAsync_leaves_the_map_untouched_when_any_token_is_bad()
+    {
+        using LocalContentKeyProvider provider = TestKeys.NewProvider();
+        var protector = new PostQuantumConfigProtector(provider);
+
+        var values = new Dictionary<string, string?>
+        {
+            ["Good"] = protector.Protect("keep me"),
+            // Carries the pqc.v1 prefix (so it's treated as a token) but is malformed — must abort the batch.
+            ["Bad"] = "pqc.v1.not-a-real-token",
+            ["Plain"] = "untouched",
+        };
+        Dictionary<string, string?> before = new(values);
+
+        await Assert.ThrowsAsync<ConfigurationProtectionException>(() => protector.ReprotectAllAsync(values));
+
+        // All-or-nothing: nothing was committed, so every entry is byte-for-byte what it was.
+        Assert.Equal(before["Good"], values["Good"]);
+        Assert.Equal(before["Bad"], values["Bad"]);
+        Assert.Equal(before["Plain"], values["Plain"]);
+
+        // And the surviving good token still opens to its original plaintext.
+        Assert.Equal("keep me", protector.Unprotect(values["Good"]!));
+    }
+
+    [Fact]
     public async Task ReprotectAllAsync_with_bindKeyAsContext_reseals_under_each_key()
     {
         using LocalContentKeyProvider provider = TestKeys.NewProvider();

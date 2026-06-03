@@ -18,6 +18,14 @@ namespace PostQuantum.Configuration;
 /// underlying provider is (the local provider is fully thread-safe).
 /// </para>
 /// <para>
+/// The synchronous members (<see cref="Protect"/>, <see cref="Unprotect"/>, <see cref="UnprotectToSecret"/>,
+/// <see cref="TryUnprotect"/>) block on the key provider via <c>GetAwaiter().GetResult()</c>. This is safe
+/// for an <see cref="IContentKeyProvider"/> that completes synchronously, such as the local keyring
+/// provider. If you supply a provider that performs genuine asynchronous I/O (a remote KMS, say), call the
+/// <see cref="ProtectAsync"/>/<see cref="UnprotectAsync"/> members instead — blocking on a real async call
+/// can starve the thread pool, and will deadlock under a single-threaded synchronization context.
+/// </para>
+/// <para>
 /// Recovered plaintext is returned as a <see cref="string"/>. .NET strings are immutable and cannot be
 /// reliably zeroed, so a decrypted secret may linger in the managed heap until garbage collected — an
 /// inherent limit of any string-returning API. The intermediate plaintext byte buffers used during
