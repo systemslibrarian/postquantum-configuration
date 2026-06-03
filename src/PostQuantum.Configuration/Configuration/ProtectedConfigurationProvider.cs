@@ -70,7 +70,14 @@ internal sealed class ProtectedConfigurationProvider : IConfigurationProvider, I
     }
 
     /// <inheritdoc />
-    public void Set(string key, string? value) => _inner.Set(key, value);
+    public void Set(string key, string? value)
+    {
+        _inner.Set(key, value);
+        // Drop any memoised plaintext for this key so the next read reflects the new value rather than
+        // returning a stale decryption. Without this, overwriting a key with a different token (or a
+        // plaintext) would be ignored until the source reloads.
+        _decrypted.TryRemove(key, out _);
+    }
 
     /// <inheritdoc />
     public IChangeToken GetReloadToken() => _inner.GetReloadToken();

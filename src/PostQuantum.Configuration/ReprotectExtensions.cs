@@ -39,6 +39,14 @@ public static class ReprotectExtensions
     /// </param>
     /// <param name="cancellationToken">A token to cancel between entries.</param>
     /// <returns>The count of values that were protected tokens and got re-sealed.</returns>
+    /// <remarks>
+    /// All-or-nothing: every token is re-sealed into a staging buffer first, and the buffer is written
+    /// back to <paramref name="values"/> only once the whole batch succeeds. A malformed or
+    /// failed-authentication token (or a cancellation) aborts the operation with <paramref name="values"/>
+    /// left exactly as it was found — never partially migrated. This keeps the fail-closed contract: you
+    /// either get a fully re-sealed map or your original one, but not an indeterminate mix.
+    /// </remarks>
+    /// <exception cref="ConfigurationProtectionException">A value is a protected token that is malformed or fails to authenticate.</exception>
     public static async Task<int> ReprotectAllAsync(
         this IConfigurationProtector protector,
         IDictionary<string, string?> values,
@@ -48,7 +56,8 @@ public static class ReprotectExtensions
         ArgumentNullException.ThrowIfNull(protector);
         ArgumentNullException.ThrowIfNull(values);
 
-        int resealed = 0;
+        // Stage every re-seal before mutating the caller's map, so a failure midway leaves it untouched.
+        var resealedEntries = new List<KeyValuePair<string, string?>>();
         foreach (string key in new List<string>(values.Keys))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -61,10 +70,16 @@ public static class ReprotectExtensions
 
             string? context = bindKeyAsContext ? key : null;
             string plaintext = await protector.UnprotectAsync(value, context, cancellationToken).ConfigureAwait(false);
-            values[key] = await protector.ProtectAsync(plaintext, context, cancellationToken).ConfigureAwait(false);
-            resealed++;
+            string token = await protector.ProtectAsync(plaintext, context, cancellationToken).ConfigureAwait(false);
+            resealedEntries.Add(new KeyValuePair<string, string?>(key, token));
         }
 
-        return resealed;
+        // Commit the whole batch atomically — past this point nothing can throw.
+        foreach (KeyValuePair<string, string?> entry in resealedEntries)
+        {
+            values[entry.Key] = entry.Value;
+        }
+
+        return resealedEntries.Count;
     }
 }

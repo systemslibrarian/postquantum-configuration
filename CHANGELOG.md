@@ -5,6 +5,28 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). While in `0.x` preview, **minor versions may break** the
 API or the `pqc.v1` token format; the prefix version will change if the wire format changes.
 
+## [0.2.0-preview.2] — 2026-06-03
+
+Bug-fix release. No `pqc.v1` token-format change — `0.2.0-preview.1` tokens still decrypt.
+
+### Fixed
+
+- **Transparent config cache coherency** — `ProtectedConfigurationProvider.Set` now evicts the memoised
+  plaintext for the key, so overwriting a value with a new token (or a plaintext) is reflected on the
+  next read instead of returning the stale decryption.
+- **`ReprotectAllAsync` is now all-or-nothing** — re-sealed tokens are staged and committed only after
+  the whole batch succeeds. A malformed/failed-authentication token (or cancellation) aborts with the
+  caller's map left exactly as it was found, never partially migrated. Holds the fail-closed contract.
+- **`pqc-config` could silently drop a value starting with `-`** — `--value --my-secret` parsed
+  `--value` as a bare flag and sealed an empty value from stdin. Added the unambiguous `--key=value`
+  form (e.g. `--value=--my-secret`); usage text documents it.
+
+### Changed
+
+- Documented that the synchronous `PostQuantumConfigProtector` members block on the key provider and are
+  intended for synchronous providers; remote/async providers should use the `…Async` members.
+- `ArgMap` is now covered by tests (`InternalsVisibleTo` to the test project). **9 more tests** (78 total).
+
 ## [0.2.0-preview.1] — 2026-06-03
 
 Closes the entire 0.1 roadmap. Backward-compatible: `pqc.v1` tokens from 0.1 still decrypt.
