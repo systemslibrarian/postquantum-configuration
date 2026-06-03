@@ -1,0 +1,39 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+*.binlog
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+nuget.config.user
+
+# Test / coverage
+[Tt]est[Rr]esults/
+coverage/
+*.coverage
+*.trx
+*.cobertura.xml
+
+# Generated SBOM goes to artifacts/ which is already ignored; keep committed SBOM under sbom/
+# (sbom/ is intentionally NOT ignored)
+
+# IDE
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — never commit real passphrases or keyrings derived from them
+*.secret
+secrets.json
+appsettings.*.Secrets.json
