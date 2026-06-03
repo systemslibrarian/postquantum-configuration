@@ -34,11 +34,17 @@ writes the envelope and the token framing.
 
 ### Scope of the “post-quantum” claim
 
-The only post-quantum property today is **symmetric-by-key-size**: AES-256-GCM and Argon2id retain
-useful margin against a quantum adversary because Grover's algorithm only halves their effective
-strength. **No post-quantum asymmetric KEM (ML-KEM, hybrid wrap) is shipped.** Do not describe
-deployments built on this release as “quantum-safe key exchange.” See
-[`KNOWN-GAPS.md`](KNOWN-GAPS.md).
+With the **default** (symmetric) key provider, the post-quantum property is **symmetric-by-key-size**:
+AES-256-GCM and Argon2id retain useful margin against a quantum adversary because Grover's algorithm only
+halves their effective strength. No asymmetric KEM is involved — do not call it “quantum-safe key
+exchange.”
+
+The optional **`HybridKemContentKeyProvider`** (0.2+) adds post-quantum **asymmetric** key wrapping:
+each content key is wrapped with **ML-KEM-768** (FIPS 203) **and** **ECDH P-256**, combined through
+HKDF-SHA256 and AES-256-GCM, so the wrap survives unless *both* are broken. The primitives are the .NET
+BCL's; the combiner follows the standard concatenate-into-HKDF, transcript-bound pattern but is **not a
+named standard and has not been independently audited.** It requires .NET 10 + ML-KEM (OpenSSL 3.5+ on
+Linux). See [`KNOWN-GAPS.md`](KNOWN-GAPS.md) and [`docs/threat-model.md`](docs/threat-model.md).
 
 ## Security properties (invariants)
 
@@ -78,5 +84,8 @@ deployments built on this release as “quantum-safe key exchange.” See
 | AES-256-GCM (value encryption) | .NET BCL `System.Security.Cryptography.AesGcm` |
 | Argon2id (KEK derivation) | `PostQuantum.KeyManagement` (via `Konscious.Security.Cryptography.Argon2`) |
 | Content-key generation, wrapping, rotation | `PostQuantum.KeyManagement` |
+| ML-KEM-768 (hybrid provider) | .NET BCL `System.Security.Cryptography.MLKem` (FIPS 203) |
+| ECDH P-256, HKDF-SHA256 (hybrid provider) | .NET BCL `System.Security.Cryptography` |
 
-No cryptographic primitive is implemented in this repository.
+No cryptographic primitive is implemented in this repository; the hybrid provider only **combines** BCL
+primitives (concatenated shared secrets into HKDF, transcript-bound).

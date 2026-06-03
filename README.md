@@ -6,10 +6,14 @@ appsettings sections — for .NET 8, 9, and 10.**
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Target](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-> **Status: `0.1.0-preview.1`.** First public preview. The API and token format may change before
-> `1.0`. **Not independently audited.** See [Security posture](#security-posture),
-> [`SECURITY.md`](SECURITY.md), and [`KNOWN-GAPS.md`](KNOWN-GAPS.md) — we would rather under-claim than
-> overstate.
+> **Status: `0.2.0-preview.1`.** The API and token format may change before `1.0`. **Not independently
+> audited.** See [Security posture](#security-posture), [`SECURITY.md`](SECURITY.md), and
+> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) — we would rather under-claim than overstate.
+>
+> **New in 0.2:** an optional [hybrid post-quantum key-wrapping provider](#optional-hybrid-post-quantum-key-wrapping-ml-kem-768--ecdh-p-256)
+> (ML-KEM-768 + ECDH P-256), a [zeroable `Secret`](#avoiding-lingering-plaintext-with-secret) return
+> type, [re-seal helpers](#re-sealing-after-rotation) for rotation, and the
+> [`pqc-config` CLI](#cli-pqc-config).
 
 ---
 
@@ -25,6 +29,10 @@ appsettings sections — for .NET 8, 9, and 10.**
   - [Dependency injection](#dependency-injection)
   - [Context binding (swap resistance)](#context-binding-swap-resistance)
   - [Key rotation](#key-rotation)
+  - [Re-sealing after rotation](#re-sealing-after-rotation)
+  - [Avoiding lingering plaintext with `Secret`](#avoiding-lingering-plaintext-with-secret)
+  - [Optional: hybrid post-quantum key wrapping (ML-KEM-768 + ECDH P-256)](#optional-hybrid-post-quantum-key-wrapping-ml-kem-768--ecdh-p-256)
+  - [CLI: `pqc-config`](#cli-pqc-config)
 - [Token format](#token-format)
 - [Public API at a glance](#public-api-at-a-glance)
 - [Security posture](#security-posture)
@@ -83,7 +91,7 @@ to the same discipline: **honesty over polish, fail-closed always, no rolled-you
 |---|---|
 | Centralised secret storage, access policies, audit logs, dynamic secrets | A managed vault (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault) — and use this for the values that still land on disk. |
 | Protecting ASP.NET cookies, antiforgery tokens, OAuth state | `Microsoft.AspNetCore.DataProtection` — that's exactly its job. |
-| Quantum-safe **key exchange / transport** today | Not this library yet — its post-quantum property is symmetric-only (see below). For PQ JOSE/JWE see `PostQuantum.Jwt`. |
+| Quantum-safe **key exchange / transport** for tokens on the wire | `PostQuantum.Jwt` (PQ JOSE/JWE). This library's [hybrid provider](#optional-hybrid-post-quantum-key-wrapping-ml-kem-768--ecdh-p-256) does PQ asymmetric *key wrapping* for config values, not transport. |
 | Encrypting files or large blobs | A streaming AEAD / file-encryption library. |
 
 Honest framing: the win here is **good defaults and ergonomics**, not novel cryptography. The
@@ -206,8 +214,80 @@ keys.Rotate("a new passphrase", LocalKekOptions.Interactive);
 protector.Unprotect(oldToken); // still works
 ```
 
-To physically re-seal stored values under the new key, decrypt with the protector and `Protect` again,
-or use `IContentKeyProvider.RewrapAsync` for the wrapped-key-only path.
+### Re-sealing after rotation
+
+After a rotation, old tokens still open but remain *wrapped under the old key*. Migrate them to the new
+active key with the re-seal helpers (plaintext is handled through a zeroable `Secret` internally):
+
+```csharp
+// One value:
+string fresh = protector.Reprotect(oldToken);
+
+// A whole map of configuration values, in place — plaintext entries are left untouched:
+int resealed = await protector.ReprotectAllAsync(values);   // values: IDictionary<string,string?>
+```
+
+### Avoiding lingering plaintext with `Secret`
+
+`Unprotect` returns a `string`, which the CLR cannot reliably zero. For paths that can work with bytes,
+recover into a `Secret` that zeroes its buffer on dispose:
+
+```csharp
+using Secret secret = protector.UnprotectToSecret(token);
+Use(secret.Bytes);              // ReadOnlySpan<byte>, valid until disposed
+// string s = secret.Reveal(); // only if an API forces a string on you
+```
+
+This is a mitigation, not a guarantee — see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) — but it removes the
+unavoidable lingering-`string` for byte-friendly code.
+
+### Optional: hybrid post-quantum key wrapping (ML-KEM-768 + ECDH P-256)
+
+By default, content keys are wrapped by `PostQuantum.KeyManagement` (symmetric, Argon2id-derived KEK —
+post-quantum *by key size*). For true post-quantum **asymmetric** key wrapping, use the hybrid provider:
+each content key is wrapped to a recipient key pair using **ML-KEM-768** (FIPS 203, the post-quantum
+half) **and** **ECDH P-256** (the classical half), combined via HKDF-SHA256 + AES-256-GCM. The wrap
+stays secure unless *both* are broken.
+
+```csharp
+using PostQuantum.Configuration.Hybrid;
+
+// Recipient (the service that decrypts): generate once, persist the private key in a secret store/KMS.
+using var recipient = HybridKemContentKeyProvider.Generate();
+byte[] publicKey  = recipient.ExportPublicKey();   // distribute to senders; safe to share
+byte[] privateKey = recipient.ExportPrivateKey();  // SENSITIVE — store in a secret manager only
+
+// Anyone with the public key can seal (wrap-only):
+using var sealer = HybridKemContentKeyProvider.ImportPublicKey(publicKey);
+string token = new PostQuantumConfigProtector(sealer).Protect("Host=db;Password=quantum-safe;");
+
+// The recipient (private key) opens it:
+using var opener = HybridKemContentKeyProvider.ImportPrivateKey(privateKey);
+string secret = new PostQuantumConfigProtector(opener).Unprotect(token);
+```
+
+`HybridKemContentKeyProvider` is an `IContentKeyProvider`, so it drops into everything above —
+`AddEncrypted`, DI, `Reprotect`, `Secret`.
+
+> **Requirements & honesty.** Needs **.NET 10+** and a platform where ML-KEM is available (on Linux,
+> **OpenSSL 3.5+**); the factory methods throw `PlatformNotSupportedException` otherwise. The combiner
+> follows the standard concatenate-into-HKDF, transcript-bound pattern, but this specific construction
+> is **not a named standard and has not been independently audited.** See
+> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) and [`docs/threat-model.md`](docs/threat-model.md).
+
+### CLI: `pqc-config`
+
+A companion `dotnet` tool ([`PostQuantum.Configuration.Tool`](src/PostQuantum.Configuration.Tool))
+protects, unprotects, and rotates from a shell or CI pipeline:
+
+```bash
+dotnet tool install --global PostQuantum.Configuration.Tool --prerelease
+
+export PQC_PASSPHRASE='a strong passphrase'           # keep secrets out of shell history
+echo 'Host=db;Password=s3cr3t' | pqc-config protect --keyring keyring.txt   # -> pqc.v1.…
+pqc-config unprotect --keyring keyring.txt --token pqc.v1.…
+pqc-config rotate    --keyring keyring.txt            # fresh key, old tokens still open
+```
 
 ## Token format
 
@@ -224,31 +304,38 @@ pqc.v1.<base64url(body)>
 
 The wrapped content key is `PostQuantum.KeyManagement`'s own portable `WrappedContentKey` token, so a
 value carries everything needed to recover its data-encryption key from the provider — no shared
-per-process state. The decoder uses **overflow-safe length arithmetic** and caps every field at 1 MiB,
-so a hostile token cannot trigger a giant allocation or an out-of-bounds read.
+per-process state. (With the hybrid provider, that wrapped-key blob carries the ML-KEM ciphertext and
+the ephemeral ECDH public key instead — the token envelope is unchanged.) The decoder uses
+**overflow-safe length arithmetic** and caps every field at 1 MiB, so a hostile token cannot trigger a
+giant allocation or an out-of-bounds read.
 
 ## Public API at a glance
 
 | Member | Purpose |
 |---|---|
-| `IConfigurationProtector` | `Protect` / `Unprotect` / `TryUnprotect` (+ async), and `static IsProtected`. |
+| `IConfigurationProtector` | `Protect` / `Unprotect` / `TryUnprotect` / `UnprotectToSecret` (+ async), and `static IsProtected`. |
 | `PostQuantumConfigProtector` | Default implementation over `IContentKeyProvider`. |
+| `Secret` | Zeroable, byte-backed recovered secret (disposes → zeroed). |
 | `ConfigurationProtectionException` | Single, opaque failure type for malformed / tampered / wrong-context tokens. |
 | `builder.AddEncrypted(source, …)` | Transparent decrypt-on-read wrapper for any `IConfigurationSource`. |
 | `config.GetDecrypted(key, protector)` | Explicit decrypt-on-read for one value. |
 | `protector.DecryptIfProtected(value)` | Decrypt if it's a token, pass through otherwise. |
+| `protector.Reprotect` / `ReprotectAllAsync` | Re-seal values under the active key after rotation. |
 | `services.AddPostQuantumConfiguration()` | DI registration over a registered `IContentKeyProvider`. |
+| `HybridKemContentKeyProvider` *(net10+)* | Hybrid ML-KEM-768 + ECDH P-256 key-wrapping `IContentKeyProvider`. |
+| `pqc-config` *(separate tool package)* | CLI to protect / unprotect / rotate. |
 
 ## Security posture
 
 We aim to be honest about exactly what this library does and does not give you.
 
-**Scope of the "post-quantum" claim.** Today the only post-quantum property is
-**symmetric-by-key-size** — AES-256-GCM and Argon2id keep useful margin against a quantum adversary
-because Grover's algorithm only *halves* their effective strength (AES-256 → ~128-bit). **No
-post-quantum asymmetric KEM is shipped** (no ML-KEM, no hybrid wrap); that is inherited from
-`PostQuantum.KeyManagement` and is on the roadmap there. **Do not** describe a deployment built on this
-release as "quantum-safe key exchange." See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
+**Scope of the "post-quantum" claim.** With the **default** (symmetric) key provider, the post-quantum
+property is **symmetric-by-key-size** — AES-256-GCM and Argon2id keep useful margin against a quantum
+adversary because Grover's algorithm only *halves* their effective strength (AES-256 → ~128-bit), and no
+asymmetric KEM is involved. With the **optional hybrid provider** (ML-KEM-768 + ECDH P-256), you also
+get post-quantum **asymmetric** key wrapping — but that construction is non-standard and unaudited (see
+its [usage note](#optional-hybrid-post-quantum-key-wrapping-ml-kem-768--ecdh-p-256)). Choose your wording
+to match the provider you deploy, and see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the precise scope.
 
 **What you get**
 
@@ -288,8 +375,8 @@ Full detail: [`SECURITY.md`](SECURITY.md), [`docs/threat-model.md`](docs/threat-
 |---|---|
 | Plaintext secrets in a repo, backup, or config file | An attacker who holds **both** the keyring / KMS access **and** the passphrase |
 | Tampering with stored ciphertext (AES-GCM authentication) | A weak passphrase / low Argon2id work factor (offline guessing) |
-| A value being moved to the wrong slot (with context binding) | Secrets read from process memory after decryption |
-| Hostile / oversized tokens (overflow-safe, capped decoding) | A future quantum break of **asymmetric** KEM (none shipped to break yet) |
+| A value being moved to the wrong slot (with context binding) | Secrets read from process memory after decryption (mitigated, not solved, by `Secret`) |
+| Hostile / oversized tokens (overflow-safe, capped decoding) | A quantum break of the **classical** half alone — the ML-KEM half still holds (hybrid provider) |
 
 The full attacker model and security invariants are in [`docs/threat-model.md`](docs/threat-model.md).
 
@@ -298,6 +385,8 @@ The full attacker model and security invariants are in [`docs/threat-model.md`](
 This package is built for verifiable provenance:
 
 - **Deterministic, reproducible builds** (`Deterministic`, `ContinuousIntegrationBuild` in CI).
+- **Build-provenance attestation** — the release workflow attests every `.nupkg` with
+  `actions/attest-build-provenance`; verify with `gh attestation verify`.
 - **SourceLink + embedded untracked sources + a symbol package (`.snupkg`)** so stack traces resolve to
   exact source.
 - **SBOM** (CycloneDX) generated for every release — regenerate and inspect locally:
@@ -316,9 +405,8 @@ This package is built for verifiable provenance:
   dotnet restore --locked-mode      # honours packages.lock.json hashes
   ```
 
-What is **not** yet in place is stated plainly in [`docs/supply-chain.md`](docs/supply-chain.md):
-an author code-signing certificate and build attestations are roadmap, not present in
-`0.1.0-preview.1`.
+What is **not** yet in place is stated plainly in [`docs/supply-chain.md`](docs/supply-chain.md): an
+author code-signing certificate and an external security audit are still roadmap.
 
 ## Samples
 
@@ -337,34 +425,44 @@ See [`samples/`](samples/):
 | Target frameworks | `net8.0`, `net9.0`, `net10.0` |
 | OS | Windows, Linux, macOS — anywhere .NET 8+ runs. AES-GCM is hardware-accelerated on modern CPUs. |
 | AOT / trimming | `IsAotCompatible=true`. The public surface is `string` in, `string` out. |
+| Hybrid provider | **.NET 10+** and a host with ML-KEM (on Linux, **OpenSSL 3.5+**). Everything else has no such requirement. |
 | Dependencies | `PostQuantum.KeyManagement`, `Microsoft.Extensions.Configuration.Abstractions` / `.Primitives` / `.DependencyInjection.Abstractions`. |
 
-> No native post-quantum primitives are required, so — unlike `PostQuantum.Jwt` — this package has **no
-> OpenSSL 3.5 dependency** and runs identically everywhere.
+> The core library needs **no** native post-quantum primitives, so it runs identically everywhere. Only
+> the optional hybrid provider requires .NET 10 + ML-KEM; it degrades to a clear
+> `PlatformNotSupportedException` where unavailable.
 
 ## Building from source
 
 ```bash
 dotnet build       # builds net8.0, net9.0, net10.0 — zero warnings (warnings are errors)
-dotnet test        # 51 tests, zero skips
+dotnet test        # 69 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
 dotnet format --verify-no-changes
 dotnet pack -c Release
 ```
 
+The hybrid ML-KEM tests skip themselves (with a clear reason) on hosts without ML-KEM. To run them, use
+.NET 10 with OpenSSL 3.5+ — for example, point the runtime at a newer OpenSSL:
+
+```bash
+LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 69 tests, zero skips
+```
+
 ## Project status & roadmap
 
-`0.1.0-preview.1` — first public preview. Core protect / unprotect, the transparent `IConfiguration`
-layer, DI, and context binding are complete and tested; the API and token format are not yet frozen.
+`0.2.0-preview.1` — the 0.1 roadmap is **done**: the `pqc-config` CLI, the zeroable `Secret` return, the
+`Reprotect` / `ReprotectAllAsync` re-seal helpers, and the hybrid **ML-KEM-768 + ECDH P-256** provider
+all ship and are tested. Core protect / unprotect, the transparent `IConfiguration` layer, DI, and
+context binding are complete. The API and token format are not yet frozen.
 
-**Toward `0.2` and `1.0`** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the honest gap list):
+**Toward `1.0`** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the honest gap list):
 
-1. A `dotnet pqc-config protect` / `rotate` **CLI tool** so secrets are minted without a code path.
-2. An **`ISecret` / `SecureString`-style return** option to avoid the immutable-`string` plaintext
-   footgun.
-3. **Re-seal / bulk-rewrap helpers** for rotating stored values, integrated with keyring metadata.
-4. **Hybrid post-quantum KEK wrapping** (ML-KEM), tracking `PostQuantum.KeyManagement`'s roadmap, to
-   make the "post-quantum" claim cover asymmetric key exchange — not just symmetric key size.
-5. **External security review** before a stable `1.0`.
+1. **External security review** of the envelope and the hybrid combiner — the prerequisite for dropping
+   the "unaudited" caveat and for a stable `1.0`.
+2. **Author code-signing certificate** to complement the build-provenance attestations already produced.
+3. **Standardised hybrid** — track the IETF/NIST hybrid-KEM work and align the construction with a named
+   scheme once one stabilises.
+4. **Freeze the API and `pqc.v1` token format** and commit to SemVer wire-compatibility.
 
 ## License
 

@@ -71,6 +71,14 @@ public sealed class PostQuantumConfigProtector : IConfigurationProtector
     }
 
     /// <inheritdoc />
+    public Secret UnprotectToSecret(string token, string? context = null)
+    {
+        ProtectedValue value = ProtectedValue.Decode(token);
+        using ContentKey contentKey = UnwrapAsync(value, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        return new Secret(value.DecryptToBytes(contentKey, context));
+    }
+
+    /// <inheritdoc />
     public bool TryUnprotect(string token, [NotNullWhen(true)] out string? plaintext, string? context = null)
     {
         plaintext = null;

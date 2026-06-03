@@ -12,6 +12,7 @@ Honest accounting of what provenance signals this package carries — and what i
 | **Central, pinned dependencies** | ✅ | Central Package Management (`Directory.Packages.props`) — one version per dependency, transitive pinning on. |
 | **Lock file restore** | ✅ (opt-in) | `dotnet restore --locked-mode` honours `packages.lock.json` hashes. Generate with `dotnet restore --use-lock-file`. |
 | **SBOM (CycloneDX)** | ✅ | `./build/generate-sbom.sh` → `sbom/PostQuantum.Configuration.cdx.json`. |
+| **Build-provenance attestation** | ✅ | `actions/attest-build-provenance` over every `.nupkg` in `release.yml`. Verify with `gh attestation verify`. |
 | **README + license in package** | ✅ | `PackageReadmeFile`, `PackageLicenseExpression=MIT`. |
 | **MIT license, explicit copyright** | ✅ | `LICENSE`, `Copyright` property. |
 
@@ -21,10 +22,9 @@ We will not imply provenance we don't have.
 
 | Signal | Status | Plan |
 |---|---|---|
-| **Author code-signing certificate** | ❌ | The `.nupkg` carries NuGet.org's repository signature once published, but not an author signature. A code-signing cert is roadmap before `1.0`. |
-| **Build provenance attestation (SLSA / GitHub artifact attestations)** | ❌ | Roadmap. Intend to publish `actions/attest-build-provenance` attestations from the release workflow. |
+| **Author code-signing certificate** | ❌ | The `.nupkg` carries NuGet.org's repository signature once published, and a build-provenance attestation, but not an author code signature. A code-signing cert is roadmap before `1.0`. |
 | **Reproducible-build verification by a third party** | ❌ | Builds are deterministic; no independent rebuild-and-compare is published yet. |
-| **External security audit** | ❌ | Roadmap before stable `1.0` (see [`KNOWN-GAPS.md` §6](../KNOWN-GAPS.md)). |
+| **External security audit** | ❌ | Roadmap before stable `1.0` (see [`KNOWN-GAPS.md` §6](../KNOWN-GAPS.md)). An internal [self-review checklist](security-review-checklist.md) runs each release. |
 
 ## Verifying a release
 

@@ -5,6 +5,42 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). While in `0.x` preview, **minor versions may break** the
 API or the `pqc.v1` token format; the prefix version will change if the wire format changes.
 
+## [0.2.0-preview.1] — 2026-06-03
+
+Closes the entire 0.1 roadmap. Backward-compatible: `pqc.v1` tokens from 0.1 still decrypt.
+
+### Added
+
+- **Hybrid post-quantum key wrapping** — `HybridKemContentKeyProvider` (in `PostQuantum.Configuration.Hybrid`,
+  **.NET 10+**). Wraps each content key with **ML-KEM-768** (FIPS 203) **and** **ECDH P-256**, combined
+  through HKDF-SHA256 and sealed with AES-256-GCM — secure unless *both* halves break. Full transcript
+  binding (label + ML-KEM ciphertext + ephemeral ECDH public in HKDF `info`). Generate / export / import
+  recipient key pairs; public-only (wrap-only) and private (wrap + unwrap) modes. It's an
+  `IContentKeyProvider`, so it composes with `AddEncrypted`, DI, `Reprotect`, and `Secret`.
+- **Zeroable `Secret`** + `IConfigurationProtector.UnprotectToSecret` — recover plaintext into a buffer
+  that is zeroed on dispose instead of an immutable, un-zeroable `string`.
+- **Re-seal helpers** — `IConfigurationProtector.Reprotect(token)` and `ReprotectAllAsync(dictionary)`
+  migrate values onto the active key after a rotation.
+- **`pqc-config` CLI** — new `PostQuantum.Configuration.Tool` package: `protect` / `unprotect` /
+  `rotate` over a persisted keyring, with stdin input so secrets stay out of shell history.
+- **Build-provenance attestation** — `actions/attest-build-provenance` over the packed `.nupkg`s in a
+  new `release.yml`; `docs/RELEASE.md` and `docs/security-review-checklist.md` added.
+- **18 more tests** (69 total): `Secret` lifecycle, reprotect/rotation migration, and the full hybrid
+  ML-KEM path (these skip with a clear reason on hosts without ML-KEM, run fully where it's available).
+
+### Changed
+
+- Docs reframed: the post-quantum claim now depends on the chosen provider (symmetric-by-key-size by
+  default; post-quantum asymmetric with the hybrid provider). KNOWN-GAPS §1–§4, §7 updated to reflect
+  closed gaps.
+
+### Security
+
+- The hybrid combiner uses standard primitives and the well-trodden concatenate-into-HKDF,
+  transcript-bound pattern, but is **not a named standard and has not been independently audited.** The
+  default provider remains symmetric-only. Still **not independently audited** overall; preview
+  API/token format.
+
 ## [0.1.0-preview.1] — 2026-06-03
 
 First public preview.
@@ -45,4 +81,5 @@ First public preview.
   Grover). No asymmetric ML-KEM is shipped. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 - **Not independently audited.** Treat the API and token format as unstable until `1.0`.
 
+[0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.1
 [0.1.0-preview.1]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.1.0-preview.1

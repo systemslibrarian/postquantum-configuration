@@ -4,6 +4,7 @@
     <Project Path="samples/WebApi/WebApi.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/PostQuantum.Configuration.Tool/PostQuantum.Configuration.Tool.csproj" />
     <Project Path="src/PostQuantum.Configuration/PostQuantum.Configuration.csproj" />
   </Folder>
   <Folder Name="/tests/">

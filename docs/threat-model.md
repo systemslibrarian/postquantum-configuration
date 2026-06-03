@@ -59,8 +59,10 @@ These are real threats this library does **not** address. Pair it with the right
 - **Secrets in process memory.** Once decrypted to a `string`, a secret can be read from the heap by
   anything with that access. See [`KNOWN-GAPS.md` §2](../KNOWN-GAPS.md).
 - **Access control, audit logging, dynamic secrets.** This is not a vault. Use one for those properties.
-- **Quantum break of asymmetric KEM.** None is shipped to break; the post-quantum claim is
-  symmetric-only. See [`KNOWN-GAPS.md` §1](../KNOWN-GAPS.md).
+- **Quantum break of the classical KEM half (hybrid provider).** The hybrid provider stays secure as
+  long as *either* ML-KEM-768 *or* ECDH P-256 holds; a break of P-256 alone does not expose the key. A
+  break of *both* would. With the default (symmetric) provider, there is no asymmetric KEM in play. See
+  [`KNOWN-GAPS.md` §1](../KNOWN-GAPS.md).
 - **Side channels.** Timing/cache side channels in the underlying AES-GCM / Argon2id implementations are
   out of scope and inherited from the BCL / `PostQuantum.KeyManagement`.
 
@@ -72,5 +74,6 @@ These are real threats this library does **not** address. Pair it with the right
 | Nonce | 96-bit, random per value | GCM-standard size; fresh content key per value keeps nonce-reuse risk negligible |
 | Tag | 128-bit | Full GCM tag |
 | Content key | 256-bit, CSPRNG, one per value | Independent envelopes; no shared per-process key state |
-| KEK derivation / wrapping | Argon2id + AES-256-GCM | Delegated to `PostQuantum.KeyManagement` |
+| KEK derivation / wrapping (default) | Argon2id + AES-256-GCM | Delegated to `PostQuantum.KeyManagement` |
+| KEK wrapping (hybrid, optional) | ML-KEM-768 + ECDH P-256 → HKDF-SHA256 → AES-256-GCM | Post-quantum asymmetric; secure unless both halves break. Transcript-bound combiner; native BCL primitives; unaudited |
 | Additional authenticated data | `"PostQuantum.Configuration/v1"` (+ optional context) | Domain separation; opt-in slot binding |

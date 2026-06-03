@@ -1,0 +1,73 @@
+name: Release
+
+# Builds, tests, packs, generates an SBOM, and produces a signed build-provenance
+# attestation for the published packages. Triggered by pushing a version tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write       # required for build-provenance attestations
+  attestations: write   # required to write the attestation
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CI: 'true'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (8 / 9 / 10)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Verify formatting
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+      - name: Pack library + tool
+        run: |
+          dotnet pack src/PostQuantum.Configuration/PostQuantum.Configuration.csproj -c Release -o artifacts --no-build
+          dotnet pack src/PostQuantum.Configuration.Tool/PostQuantum.Configuration.Tool.csproj -c Release -o artifacts --no-build
+
+      - name: Generate SBOM
+        run: ./build/generate-sbom.sh
+
+      - name: Attest build provenance for the packages
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'artifacts/*.nupkg'
+
+      # Author code-signing is not yet configured (no certificate). See docs/supply-chain.md.
+      # When a cert is available, sign before publishing:
+      #   dotnet nuget sign artifacts/*.nupkg --certificate-path "$CERT" --timestamper "$TSA"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+            sbom/*.json
+
+      # Publishing to NuGet.org is a manual, reviewed step until 1.0:
+      #   dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"

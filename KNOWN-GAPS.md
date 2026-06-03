@@ -6,53 +6,54 @@ close it.
 
 ---
 
-## 1. "Post-quantum" is a symmetric-only claim today
+## 1. The "post-quantum" claim depends on which provider you use
 
-The only post-quantum property is **symmetric-by-key-size**. AES-256-GCM and Argon2id retain useful
-margin against a quantum adversary because Grover's algorithm only *halves* their effective strength
-(AES-256 ≈ 128-bit post-quantum). **No post-quantum asymmetric KEM is shipped** — there is no ML-KEM, no
-X-Wing, no hybrid wrap. Key-encryption keys come from `PostQuantum.KeyManagement`, which is itself
-honest that it ships no asymmetric PQ KEM in its current release.
+With the **default** (symmetric) key provider, the only post-quantum property is
+**symmetric-by-key-size**: AES-256-GCM and Argon2id retain useful margin against a quantum adversary
+because Grover's algorithm only *halves* their effective strength (AES-256 ≈ 128-bit post-quantum). No
+asymmetric KEM is involved.
 
-**Impact:** do not describe a deployment on this release as “quantum-safe key exchange.” The forward
-property you get is that the *symmetric* layer doesn't need re-encryption when large quantum computers
-arrive.
+As of 0.2 there **is** an optional hybrid provider (`HybridKemContentKeyProvider`) that adds true
+post-quantum **asymmetric** key wrapping with ML-KEM-768 + ECDH P-256. **But** (a) it requires .NET 10 +
+ML-KEM (OpenSSL 3.5+ on Linux), and (b) the combiner — while built from the standard
+concatenate-into-HKDF, transcript-bound pattern — is **not a named standard and has not been
+independently audited** (see §6).
 
-**Closing it:** roadmap item — hybrid ML-KEM KEK wrapping, tracking `PostQuantum.KeyManagement`.
+**Impact:** describe deployments to match the provider you actually run. The default provider is not
+"quantum-safe key exchange"; the hybrid provider is post-quantum key exchange but unaudited.
 
-## 2. Recovered plaintext is an immutable `string`
+**Closing it fully:** roadmap — external review of the combiner, and alignment with a standardised
+hybrid KEM (e.g. IETF X-Wing) once one stabilises in the BCL.
 
-`Unprotect` returns `string`. .NET strings are immutable and interned-eligible, so a decrypted secret
-**cannot be reliably zeroed** and may linger on the managed heap until garbage collection (and possibly
-in a swap file or crash dump).
+## 2. The default return type is still an immutable `string`
 
-We do zero the intermediate byte buffers used during encrypt and decrypt, and `ContentKey` from
-`PostQuantum.KeyManagement` zeroes its key material on dispose. But the final plaintext, once it is a
-`string`, is out of our hands.
+`Unprotect` returns `string`, which the CLR cannot reliably zero — a decrypted secret may linger on the
+managed heap until GC (and possibly in a swap file or crash dump).
 
-**Impact:** this library is not suitable on its own for the strictest in-memory-secret threat models
-(e.g. defending against another process reading your heap).
+As of 0.2, `UnprotectToSecret` returns a `Secret` that holds the plaintext in a buffer it zeroes on
+dispose, and `Reprotect` uses that path internally. The intermediate byte buffers in encrypt/decrypt are
+zeroed, and `ContentKey` zeroes its key material. **But** `Secret.Reveal()` and the convenience `string`
+APIs still produce immutable strings, and `Secret` is a mitigation, not a guarantee (GC compaction can
+still copy buffers).
 
-**Closing it:** roadmap item — an `ISecret` / `IMemoryOwner<byte>`-returning API that never produces a
-`string`.
+**Impact:** byte-friendly code can now minimise plaintext lifetime; code that must hand a `string` to
+another API still can't fully control it. This library is still not a substitute for OS-level secret
+protection against an attacker who can read your process memory.
 
-## 3. No built-in CLI to mint or rotate tokens
+**Closing it fully:** bounded by the platform — there is no perfectly zeroable managed `string`.
 
-Today you protect values from code (or the sample's `/secrets/protect` endpoint). There is no
-`dotnet`-tool you can run in CI or an ops shell to seal a value, so the “mint a token, paste it into
-appsettings” workflow requires a small program.
+## 3. ~~No built-in CLI~~ — done in 0.2
 
-**Closing it:** roadmap item — a `dotnet pqc-config` global tool with `protect` / `unprotect` /
-`rotate` verbs.
+The `pqc-config` tool (`PostQuantum.Configuration.Tool`) ships `protect` / `unprotect` / `rotate`.
+*Remaining nuance:* the CLI uses a single-passphrase keyring, so `rotate` rotates the key under the same
+passphrase (changing the passphrase outright while keeping old tokens openable needs multi-passphrase
+resolution, which the simple CLI does not do).
 
-## 4. No bulk re-seal / migration helper
+## 4. ~~No bulk re-seal helper~~ — done in 0.2
 
-After a key rotation, old tokens still open (previous KEKs are retained), but they remain *wrapped under
-the old KEK*. There is no one-call helper to walk a configuration source and re-seal every protected
-value under the new active KEK. You can do it manually (`Unprotect` then `Protect`, or
-`IContentKeyProvider.RewrapAsync` for the wrapped-key-only path).
-
-**Closing it:** roadmap item — a `ReprotectAsync(IConfiguration, …)` / keyring-aware bulk rewrap.
+`Reprotect(token)` and `ReprotectAllAsync(IDictionary<string,string?>)` re-seal values under the active
+key after a rotation. *Remaining nuance:* `ReprotectAllAsync` operates on a mutable dictionary you load
+and persist yourself; it does not write back to a live `IConfigurationProvider`.
 
 ## 5. Context binding is opt-in, not on by default
 
@@ -69,16 +70,19 @@ mismatched ones (by design).
 
 ## 6. Not independently audited
 
-No third party has reviewed this code or its envelope construction. The cryptographic primitives are the
-.NET BCL's and `PostQuantum.KeyManagement`'s — not re-implemented here — which limits the blast radius,
-but the framing, token format, and integration logic are unreviewed.
+No third party has reviewed this code, its envelope construction, or the hybrid ML-KEM + ECDH combiner.
+The cryptographic primitives are the .NET BCL's and `PostQuantum.KeyManagement`'s — not re-implemented
+here — which limits the blast radius, but the framing, token format, hybrid combiner, and integration
+logic are unreviewed. An internal [self-review checklist](docs/security-review-checklist.md) is run each
+release; that is not a substitute for external audit.
 
 **Closing it:** roadmap item — external review before a stable `1.0`.
 
-## 7. Supply-chain provenance is partial
+## 7. Supply-chain provenance: code-signing still missing
 
-Deterministic builds, SourceLink, symbol packages, and a CycloneDX SBOM are in place. **Author
-code-signing certificate and build/SLSA attestations are not yet** — see
+Deterministic builds, SourceLink, symbol packages, a CycloneDX SBOM, and — as of 0.2 — a
+**build-provenance attestation** (`actions/attest-build-provenance`) in the release workflow are in
+place. **An author code-signing certificate is still not present** — see
 [`docs/supply-chain.md`](docs/supply-chain.md) for exactly what is and isn't present.
 
 ## 8. Preview stability

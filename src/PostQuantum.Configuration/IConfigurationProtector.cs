@@ -55,6 +55,15 @@ public interface IConfigurationProtector
     string Unprotect(string token, string? context = null);
 
     /// <summary>
+    /// Recovers the plaintext into a zeroable <see cref="Secret"/> rather than a lingering
+    /// <see cref="string"/>. Prefer this on paths that can operate on bytes. Always dispose the result.
+    /// </summary>
+    /// <exception cref="ConfigurationProtectionException">
+    /// The token is malformed, or the ciphertext/tag/context does not authenticate.
+    /// </exception>
+    Secret UnprotectToSecret(string token, string? context = null);
+
+    /// <summary>
     /// Attempts to recover the plaintext from <paramref name="token"/>, returning <see langword="false"/>
     /// instead of throwing when the token is missing, malformed, or fails authentication.
     /// </summary>

@@ -97,6 +97,25 @@ internal sealed class ProtectedValue
     /// </exception>
     internal string Decrypt(ContentKey contentKey, string? context)
     {
+        byte[] plaintextBytes = DecryptToBytes(contentKey, context);
+        try
+        {
+            return Encoding.UTF8.GetString(plaintextBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(plaintextBytes);
+        }
+    }
+
+    /// <summary>
+    /// Decrypts this value into a freshly allocated byte buffer that the caller owns and is responsible
+    /// for zeroing (for example, by handing it to a <see cref="Secret"/>). Avoids materialising a
+    /// lingering <see cref="string"/>.
+    /// </summary>
+    /// <exception cref="ConfigurationProtectionException">The ciphertext/tag/context does not authenticate.</exception>
+    internal byte[] DecryptToBytes(ContentKey contentKey, string? context)
+    {
         byte[] aad = BuildAad(context);
         var plaintextBytes = new byte[_ciphertext.Length];
 
@@ -104,17 +123,15 @@ internal sealed class ProtectedValue
         {
             using var aes = new AesGcm(contentKey.Key, TagSizeInBytes);
             aes.Decrypt(_nonce, _ciphertext, _tag, plaintextBytes, aad);
-            return Encoding.UTF8.GetString(plaintextBytes);
+            return plaintextBytes;
         }
         catch (CryptographicException ex)
         {
+            // Don't leak a half-filled buffer if authentication failed.
+            CryptographicOperations.ZeroMemory(plaintextBytes);
             // Unify "tampered", "wrong key", and "wrong context" into one opaque failure.
             throw new ConfigurationProtectionException(
                 "The protected configuration value failed authentication and could not be decrypted.", ex);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(plaintextBytes);
         }
     }
 
