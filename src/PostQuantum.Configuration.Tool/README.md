@@ -74,6 +74,20 @@ Key files are self-describing (`pqc.hybrid.pub.v1.…` / `pqc.hybrid.key.v1.…`
 — or a public key where decryption is needed — is a clear, immediate error. Hybrid commands need the
 .NET 10 runtime; elsewhere they fail with an actionable message rather than a missing-command surprise.
 
+### CI guardrails
+
+```bash
+# Keyless heuristic scan: exit 1 if any plaintext value looks like a secret.
+pqc-config audit --file appsettings.json
+
+# Pre-deploy gate: every token must decrypt with the key source you intend to deploy,
+# and --require keys must exist AND be protected. Plaintext is never printed. Exit 1 on failure.
+pqc-config check --keyring keyring.txt --file appsettings.json --require ConnectionStrings:Default
+```
+
+Wire both into CI (see [`docs/PQC-MIGRATION.md`](../../docs/PQC-MIGRATION.md) for a GitHub Actions
+snippet) so a forgotten secret, a wrong keyring, or a missed re-seal fails the build — not the deploy.
+
 Run `pqc-config --help` for the full option list, and see
 [`docs/PQC-MIGRATION.md`](../../docs/PQC-MIGRATION.md) for the end-to-end adoption walkthrough.
 

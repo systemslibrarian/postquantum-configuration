@@ -35,6 +35,8 @@ internal static class Program
                 "reprotect-file" => ReprotectFile(options),
                 "inspect" => Inspect(options),
                 "keygen" => Keygen(options),
+                "audit" => Audit(options),
+                "check" => Check(options),
                 _ => Fail($"Unknown command '{command}'. Run 'pqc-config --help'."),
             };
         }
@@ -211,6 +213,69 @@ internal static class Program
         return 0;
     }
 
+    private static int Audit(ArgMap options)
+    {
+        string file = options.Require("file");
+        FileAuditResult result = FileProtection.Audit(JsonConfigFile.Load(file));
+
+        foreach (string key in result.SuspectKeys)
+        {
+            Console.Out.WriteLine(key);
+        }
+
+        if (result.SuspectKeys.Count == 0)
+        {
+            Console.Error.WriteLine(
+                $"No plaintext values in '{file}' matched the secret heuristics " +
+                $"({result.ProtectedCount} already protected). Heuristics catch the common cases — " +
+                "they cannot prove the file holds no secrets.");
+            return 0;
+        }
+
+        Console.Error.WriteLine(
+            $"{result.SuspectKeys.Count} plaintext value(s) in '{file}' look like secrets " +
+            $"({result.ProtectedCount} already protected). Seal them with: " +
+            $"pqc-config protect-file --file {file} --keys <key,...>");
+        return 1;
+    }
+
+    private static int Check(ArgMap options)
+    {
+        string file = options.Require("file");
+        bool bindKey = options.Has("bind-key");
+        string[] required = (options.Get("require") ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var root = JsonConfigFile.Load(file);
+        IContentKeyProvider provider = ResolveProvider(options, needUnwrap: true, createKeyring: false);
+        using var ownership = provider as IDisposable;
+
+        FileCheckResult result = FileProtection.Check(root, new PostQuantumConfigProtector(provider), bindKey, required);
+
+        foreach (string key in result.FailedKeys)
+        {
+            Console.Out.WriteLine($"FAIL {key}");
+        }
+
+        foreach (string requirement in result.UnmetRequirements)
+        {
+            Console.Out.WriteLine($"REQUIRED {requirement}");
+        }
+
+        if (result.Passed)
+        {
+            Console.Error.WriteLine(
+                $"OK: {result.TokensChecked} token(s) in '{file}' decrypt with this key source" +
+                (required.Length > 0 ? $"; all {required.Length} required key(s) are protected." : "."));
+            return 0;
+        }
+
+        Console.Error.WriteLine(
+            $"CHECK FAILED for '{file}': {result.FailedKeys.Count} token(s) did not decrypt, " +
+            $"{result.UnmetRequirements.Count} requirement(s) unmet. Do not deploy this configuration.");
+        return 1;
+    }
+
     // --- key-provider helpers ----------------------------------------------------------------------
 
     /// <summary>
@@ -328,6 +393,11 @@ internal static class Program
                               after a rotate, or onto a hybrid recipient with --to-recipient.
               inspect         Show a token's non-secret metadata (key id, provider) — no keys needed.
               keygen          Generate a hybrid ML-KEM-768 + ECDH P-256 recipient key pair (.NET 10+).
+              audit           Keyless scan of a JSON config file for plaintext values that look like
+                              secrets (heuristic). Exit 1 if any are found — CI/pre-commit friendly.
+              check           Verify every pqc.v1 token in a JSON file decrypts with the given key
+                              source; --require asserts keys that MUST be protected. Exit 1 on any
+                              failure — a pre-deploy gate. Plaintext is never printed.
 
             OPTIONS
               --keyring <path>        Path to the keyring file (required unless --recipient / inspect / --dry-run).
@@ -337,6 +407,7 @@ internal static class Program
                                       migrates a keyring-sealed file onto post-quantum hybrid wrapping.
               --public <path>         keygen: where to write the public key file (never overwrites).
               --private <path>        keygen: where to write the PRIVATE key file (never overwrites).
+              --require <a,b,c>       check: keys that must exist AND be protected tokens.
               --passphrase <value>    KEK passphrase. Prefer the PQC_PASSPHRASE env var instead.
               --value <text>          Value to protect. If omitted, read from stdin.
               --token <text>          Token to unprotect/inspect. If omitted, read from stdin.
@@ -371,6 +442,10 @@ internal static class Program
               pqc-config unprotect --recipient recipient.key --token pqc.v1.AQ...
               # Migrate a keyring-sealed file onto hybrid ML-KEM wrapping:
               pqc-config reprotect-file --keyring keyring.txt --to-recipient recipient.pub --file appsettings.json
+
+              # CI guardrails: fail the build on plaintext secrets or undecryptable tokens.
+              pqc-config audit --file appsettings.json
+              pqc-config check --keyring keyring.txt --file appsettings.json --require ConnectionStrings:Default
 
             protect-file and reprotect-file are fail-closed: the whole file is transformed in
             memory and atomically replaced only if every value succeeds — a failure leaves the

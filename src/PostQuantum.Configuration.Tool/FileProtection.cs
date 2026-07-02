@@ -92,6 +92,23 @@ internal sealed class KeySelector
 /// <param name="AlreadyProtected">How many selected values were already tokens and were left alone.</param>
 internal sealed record FileProtectionResult(IReadOnlyList<string> ChangedKeys, int AlreadyProtected);
 
+/// <summary>The outcome of a keyless <c>audit</c> scan.</summary>
+/// <param name="SuspectKeys">Plaintext string leaves that look like they hold a secret.</param>
+/// <param name="ProtectedCount">How many values are already protected tokens.</param>
+internal sealed record FileAuditResult(IReadOnlyList<string> SuspectKeys, int ProtectedCount);
+
+/// <summary>The outcome of a <c>check</c> verification pass.</summary>
+/// <param name="TokensChecked">How many protected tokens were found and test-decrypted.</param>
+/// <param name="FailedKeys">Tokens that did not decrypt with the supplied key source.</param>
+/// <param name="UnmetRequirements">Required keys that are missing or still plaintext.</param>
+internal sealed record FileCheckResult(
+    int TokensChecked,
+    IReadOnlyList<string> FailedKeys,
+    IReadOnlyList<string> UnmetRequirements)
+{
+    internal bool Passed => FailedKeys.Count == 0 && UnmetRequirements.Count == 0;
+}
+
 /// <summary>
 /// The in-memory transformations behind <c>protect-file</c> and <c>reprotect-file</c>. Both operate on
 /// the parsed tree only — a failure on any value (bad token, wrong key) throws before anything is
@@ -172,5 +189,105 @@ internal static class FileProtection
         });
 
         return new FileProtectionResult(changed, AlreadyProtected: 0);
+    }
+
+    // Key-name fragments that usually mean "this value is a secret". Deliberately conservative:
+    // a bare "key" would flag every "KeyringPath"-style setting and drown the signal in noise.
+    private static readonly string[] SensitiveKeyFragments =
+    [
+        "password", "passwd", "pwd", "secret", "apikey", "api_key", "api-key",
+        "connectionstring", "credential", "privatekey", "private_key", "private-key",
+        "accesskey", "access_key", "access-key", "token",
+    ];
+
+    /// <summary>
+    /// Keyless scan for plaintext values that look like secrets — a value under a sensitive-sounding
+    /// key, or a value that embeds a credential (<c>password=</c>) regardless of its key. A heuristic,
+    /// stated plainly: it catches the common cases, it cannot prove a file holds no secrets.
+    /// </summary>
+    internal static FileAuditResult Audit(JsonObject root)
+    {
+        var suspects = new List<string>();
+        int protectedCount = 0;
+
+        JsonConfigFile.VisitStringLeaves(root, (key, value) =>
+        {
+            if (IConfigurationProtector.IsProtected(value))
+            {
+                protectedCount++;
+                return null;
+            }
+
+            if (value.Length == 0)
+            {
+                return null;
+            }
+
+            bool sensitiveKey = SensitiveKeyFragments.Any(f => key.Contains(f, StringComparison.OrdinalIgnoreCase));
+            bool embeddedCredential = value.Contains("password=", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("pwd=", StringComparison.OrdinalIgnoreCase);
+            if (sensitiveKey || embeddedCredential)
+            {
+                suspects.Add(key);
+            }
+
+            return null;
+        });
+
+        return new FileAuditResult(suspects, protectedCount);
+    }
+
+    /// <summary>
+    /// Verifies that every protected token in <paramref name="root"/> decrypts with
+    /// <paramref name="protector"/> (a pre-deploy gate: catch a wrong keyring, a missed re-seal, or a
+    /// context mismatch in CI, not in production). Plaintext is recovered into a zeroable
+    /// <see cref="Secret"/> and discarded — never returned, never printed. Keys listed in
+    /// <paramref name="requiredKeys"/> must additionally exist and be protected.
+    /// </summary>
+    internal static FileCheckResult Check(
+        JsonObject root,
+        IConfigurationProtector protector,
+        bool bindKeyAsContext,
+        IReadOnlyCollection<string> requiredKeys)
+    {
+        var failed = new List<string>();
+        var unmetRequirements = new List<string>();
+        var protectedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var plaintextKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int tokensChecked = 0;
+
+        JsonConfigFile.VisitStringLeaves(root, (key, value) =>
+        {
+            if (!IConfigurationProtector.IsProtected(value))
+            {
+                plaintextKeys.Add(key);
+                return null;
+            }
+
+            protectedKeys.Add(key);
+            tokensChecked++;
+            try
+            {
+                using Secret secret = protector.UnprotectToSecret(value, bindKeyAsContext ? key : null);
+            }
+            catch (ConfigurationProtectionException)
+            {
+                failed.Add(key);
+            }
+
+            return null;
+        });
+
+        foreach (string required in requiredKeys)
+        {
+            if (!protectedKeys.Contains(required))
+            {
+                unmetRequirements.Add(plaintextKeys.Contains(required)
+                    ? $"{required} (present but NOT protected)"
+                    : $"{required} (missing)");
+            }
+        }
+
+        return new FileCheckResult(tokensChecked, failed, unmetRequirements);
     }
 }

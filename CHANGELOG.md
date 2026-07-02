@@ -7,6 +7,37 @@ are **frozen**: breaking either requires a major version, and a wire-format chan
 the token prefix (`pqc.vN.`) so old and new tokens are distinguishable. (During the `0.x` previews,
 minor versions were allowed to break both.)
 
+## [1.3.0] — 2026-07-02
+
+Defensive guardrails: catch the three classic configuration failures — a secret you forgot to
+encrypt, a config that won't decrypt with the deployed key, a broken key source discovered on the
+first request — in CI and at boot instead of in production. Additive only; no API break, no `pqc.v1`
+token-format change.
+
+### Added
+
+- **`protector.VerifyAsync()` / `Verify()`** — startup self-test: round-trips a random canary
+  (context-bound, never stored) and throws `ConfigurationProtectionException` if the seal-and-open
+  path is broken. Call it before the app takes traffic so a wrong passphrase, missing keyring, or
+  unavailable KMS kills the deploy at boot. A wrap-only hybrid provider (public key only) fails by
+  design — it cannot serve decryption traffic.
+- **`pqc-config audit`** — keyless scan of a JSON config file for plaintext values that look like
+  secrets: sensitive key-name fragments (`password`, `secret`, `apikey`, `connectionstring`,
+  `credential`, `token`, …) and embedded credentials (`password=` inside a value). Suspect keys print
+  one per line; exit 1 if any are found — drop it into CI or a pre-commit hook. Stated plainly in the
+  output: a heuristic that catches the common cases, not proof the file holds no secrets.
+- **`pqc-config check`** — pre-deploy gate: test-decrypts every `pqc.v1` token in the file with the
+  key source you intend to deploy (`--keyring` or `--recipient`; `--bind-key` aware). Recovered
+  plaintext goes into a zeroable buffer and is discarded — never printed. `--require a,b,c` asserts
+  keys that must exist **and** be protected (a still-plaintext required key is reported as such).
+  Exit 1 on any failure: wrong keyring, missed re-seal after rotation, context mismatch, or an unmet
+  requirement all fail the build instead of the deploy.
+- **`docs/PQC-MIGRATION.md`** gains a "CI guardrails" section with a ready-to-paste GitHub Actions
+  gate and the startup self-test snippet.
+- **8 more tests** (116 total): self-test success and wrap-only failure, audit heuristics (sensitive
+  names, embedded credentials, protected values not flagged), and check (pass, wrong key source,
+  unmet requirements, binding honoured in both directions).
+
 ## [1.2.0] — 2026-07-02
 
 Hybrid post-quantum workflows land in the CLI, plus a fail-closed hardening fix. No `pqc.v1`
@@ -191,6 +222,7 @@ First public preview.
   Grover). No asymmetric ML-KEM is shipped. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 - **Not independently audited.** Treat the API and token format as unstable until `1.0`.
 
+[1.3.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.3.0
 [1.2.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.2.0
 [1.1.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.1.0
 [1.0.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.0.0

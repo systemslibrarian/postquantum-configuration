@@ -140,6 +140,43 @@ file to a command is a clear error — and asking a public key to decrypt fails 
 time. In code, the same roles are `HybridKemContentKeyProvider.ImportPublicKey` (seal-only) and
 `ImportPrivateKey` (seal + open).
 
+## CI guardrails: catch mistakes before they ship
+
+Three failure modes account for most real-world grief; each has a guard.
+
+**"We forgot to encrypt one."** `audit` scans a config file — no keys needed — for plaintext values
+that look like secrets (sensitive key names, embedded `password=` credentials) and exits non-zero if
+it finds any. It is a heuristic, stated plainly: it catches the common cases, it cannot prove a file
+holds no secrets.
+
+**"It won't decrypt in prod."** `check` test-decrypts every token in the file with the key source you
+intend to deploy (plaintext is recovered into a zeroed buffer and discarded — never printed), and
+`--require` asserts that specific keys exist *and* are protected. Wrong keyring, missed re-seal after
+rotation, context-binding mismatch — all fail the build instead of the 3 a.m. deploy.
+
+```yaml
+# GitHub Actions — gate the deploy on both:
+- name: Config guardrails
+  env:
+    PQC_PASSPHRASE: ${{ secrets.PQC_PASSPHRASE }}
+  run: |
+    dotnet tool install --global PostQuantum.Configuration.Tool
+    pqc-config audit --file src/App/appsettings.json
+    pqc-config check --keyring keyring.txt --file src/App/appsettings.json \
+      --require ConnectionStrings:Default,Stripe:ApiKey
+```
+
+**"It failed on the first request."** In the app itself, run the startup self-test so a wrong
+passphrase, missing keyring, or unavailable KMS kills the deployment at boot, before traffic arrives:
+
+```csharp
+var protector = app.Services.GetRequiredService<IConfigurationProtector>();
+await protector.VerifyAsync();   // seals + opens a random canary; throws if the pipeline is broken
+```
+
+(A wrap-only hybrid provider — public key only — fails this check by design: it cannot serve
+decryption traffic.)
+
 ## FAQ
 
 **Is my configuration "quantum-safe" after this?**

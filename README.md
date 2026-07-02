@@ -6,7 +6,7 @@ appsettings sections — for .NET 8, 9, and 10.**
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Target](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-> **Status: `1.2.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
+> **Status: `1.3.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
 > SemVer; every token minted by a `0.x` preview still decrypts. **Not independently audited** — an
 > external audit is not currently scheduled, and `1.0` is a stability commitment, not an audit claim.
 > See [Security posture](#security-posture), [`SECURITY.md`](SECURITY.md), and
@@ -312,6 +312,11 @@ pqc-config keygen --public recipient.pub --private recipient.key
 pqc-config protect-file --recipient recipient.pub --file appsettings.json --all
 pqc-config unprotect    --recipient recipient.key --token pqc.v1.…
 pqc-config reprotect-file --keyring keyring.txt --to-recipient recipient.pub --file appsettings.json
+
+# CI guardrails — fail the build on plaintext secrets (keyless heuristic scan) or on
+# tokens that won't decrypt with the key source you intend to deploy:
+pqc-config audit --file appsettings.json
+pqc-config check --keyring keyring.txt --file appsettings.json --require ConnectionStrings:Default
 ```
 
 `--bind-key` on the file commands binds each value to its configuration key (context binding, above).
@@ -351,6 +356,7 @@ giant allocation or an out-of-bounds read.
 | `protector.DecryptIfProtected(value)` | Decrypt if it's a token, pass through otherwise. |
 | `protector.Reprotect` / `ReprotectAllAsync` | Re-seal values under the active key after rotation. |
 | `ProtectedTokenInfo.TryInspect(token, out info)` | Keyless, non-throwing token inspection: format version, provider, wrapping key id (find stale tokens after rotation). |
+| `protector.VerifyAsync()` / `Verify()` | Startup self-test: round-trips a random canary so a broken key source fails the deploy at boot, not on the first request. |
 | `services.AddPostQuantumConfiguration()` | DI registration over a registered `IContentKeyProvider`. |
 | `HybridKemContentKeyProvider` *(net10+)* | Hybrid ML-KEM-768 + ECDH P-256 key-wrapping `IContentKeyProvider`. |
 | `pqc-config` *(separate tool package)* | CLI to protect / unprotect / rotate. |
@@ -469,7 +475,7 @@ See [`samples/`](samples/):
 
 ```bash
 dotnet build       # builds net8.0, net9.0, net10.0 — zero warnings (warnings are errors)
-dotnet test        # 108 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
+dotnet test        # 116 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
 dotnet format --verify-no-changes
 dotnet pack -c Release
 ```
@@ -478,16 +484,16 @@ The hybrid ML-KEM tests skip themselves (with a clear reason) on hosts without M
 .NET 10 with OpenSSL 3.5+ — for example, point the runtime at a newer OpenSSL:
 
 ```bash
-LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 108 tests, zero skips
+LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 116 tests, zero skips
 ```
 
 ## Project status & roadmap
 
-`1.2.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
+`1.3.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
 binding, key rotation with `Reprotect` / `ReprotectAllAsync`, the zeroable `Secret` return, keyless
 token inspection (`ProtectedTokenInfo`), the hybrid **ML-KEM-768 + ECDH P-256** provider, and the
 `pqc-config` CLI — including whole-file `protect-file` / `reprotect-file` — all ship and are tested
-(108 tests, zero skips where ML-KEM is available). The public API and the `pqc.v1` token format are
+(116 tests, zero skips where ML-KEM is available). The public API and the `pqc.v1` token format are
 **frozen** under SemVer, and the whole `PostQuantum.*` dependency chain is on stable releases.
 
 **Beyond `1.0`** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the honest gap list):
