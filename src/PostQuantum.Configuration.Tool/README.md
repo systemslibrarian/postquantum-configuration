@@ -27,7 +27,33 @@ pqc-config unprotect --keyring keyring.txt --token pqc.v1.AQ...
 pqc-config rotate --keyring keyring.txt
 ```
 
-Run `pqc-config --help` for the full option list.
+### Whole config files
+
+```bash
+# Preview what would be sealed (no keys needed), then seal a section in place:
+pqc-config protect-file --file appsettings.json --section ConnectionStrings --dry-run
+pqc-config protect-file --keyring keyring.txt --file appsettings.json --section ConnectionStrings
+
+# Select exact keys (a missing or non-string key is an error, never a silent skip),
+# or everything, and optionally bind each value to its configuration key:
+pqc-config protect-file --keyring keyring.txt --file appsettings.json --keys ConnectionStrings:Default,ApiKeys:0
+pqc-config protect-file --keyring keyring.txt --file appsettings.json --all --bind-key
+
+# After a rotate, migrate every token in the file onto the new active key:
+pqc-config reprotect-file --keyring keyring.txt --file appsettings.json
+
+# Which key wraps this token? Inspect without any keys:
+pqc-config inspect --token pqc.v1.AQ...
+```
+
+Both file commands are **fail-closed and atomic**: the whole file is transformed in memory and
+atomically replaces the original only if every value succeeds — any failure leaves the file exactly as
+it was. `protect-file` is idempotent (existing tokens are skipped on re-run). Files are parsed as
+strict JSON: comments and trailing commas are rejected up front, because a rewrite would silently
+destroy them.
+
+Run `pqc-config --help` for the full option list, and see
+[`docs/PQC-MIGRATION.md`](../../docs/PQC-MIGRATION.md) for the end-to-end adoption walkthrough.
 
 ## Notes
 

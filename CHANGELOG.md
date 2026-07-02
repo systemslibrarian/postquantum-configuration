@@ -7,6 +7,35 @@ are **frozen**: breaking either requires a major version, and a wire-format chan
 the token prefix (`pqc.vN.`) so old and new tokens are distinguishable. (During the `0.x` previews,
 minor versions were allowed to break both.)
 
+## [1.1.0] — 2026-07-02
+
+Developer-experience release: whole-file workflows and keyless token inspection. Additive only — no
+breaking API change, no `pqc.v1` token-format change.
+
+### Added
+
+- **`pqc-config protect-file`** — bulk-seal string values in a JSON configuration file, in place.
+  Select with `--keys a,b,c` (exact keys; a missing or non-string key is an error, never a silent
+  skip), `--section <name>`, or `--all`; `--bind-key` binds each value to its configuration key;
+  `--dry-run` previews the affected keys without touching the file (and needs no keyring). Fail-closed
+  and atomic: the file is transformed in memory and atomically replaced only if every value seals.
+  Idempotent: existing tokens are skipped on re-run. Strict JSON only — comments/trailing commas are
+  rejected up front because a rewrite would silently destroy them.
+- **`pqc-config reprotect-file`** — after a `rotate`, re-seal every `pqc.v1` token in a JSON file
+  under the active key, all-or-nothing. Supports `--bind-key` and `--dry-run`.
+- **`pqc-config inspect`** — print a token's non-secret metadata (format version, provider id,
+  wrapping key id, wrap algorithm, ciphertext length) with **no keyring needed**. Output states
+  plainly that well-formed ≠ authentic.
+- **`ProtectedTokenInfo.TryInspect(token, out info)`** — the same keyless inspection as a public
+  library API. Non-throwing on hostile input. The key id makes stale tokens findable after a rotation
+  (pair with `Reprotect` / `ReprotectAllAsync`).
+- **`docs/PQC-MIGRATION.md`** — an honest adoption guide: the harvest-now-decrypt-later rationale, a
+  precise account of what each provider does and does not give you, the step-by-step migration, the
+  rotation runbook, and an FAQ.
+- **23 more tests** (101 total): inspection (hostile input, well-formed-vs-authentic, key-id-tracks-
+  rotation) and the file engine (selection semantics, idempotency, context binding, all-or-nothing
+  failure, strict-JSON load, atomic save).
+
 ## [1.0.0] — 2026-07-02
 
 First stable release. **No `pqc.v1` token-format change** — every token minted by any `0.x` preview
@@ -131,6 +160,7 @@ First public preview.
   Grover). No asymmetric ML-KEM is shipped. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 - **Not independently audited.** Treat the API and token format as unstable until `1.0`.
 
+[1.1.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.1.0
 [1.0.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.0.0
 [0.2.0-preview.2]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.2
 [0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.1
