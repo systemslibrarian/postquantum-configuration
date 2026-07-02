@@ -7,101 +7,10 @@ are **frozen**: breaking either requires a major version, and a wire-format chan
 the token prefix (`pqc.vN.`) so old and new tokens are distinguishable. (During the `0.x` previews,
 minor versions were allowed to break both.)
 
-## [1.3.0] — 2026-07-02
-
-Defensive guardrails: catch the three classic configuration failures — a secret you forgot to
-encrypt, a config that won't decrypt with the deployed key, a broken key source discovered on the
-first request — in CI and at boot instead of in production. Additive only; no API break, no `pqc.v1`
-token-format change.
-
-### Added
-
-- **`protector.VerifyAsync()` / `Verify()`** — startup self-test: round-trips a random canary
-  (context-bound, never stored) and throws `ConfigurationProtectionException` if the seal-and-open
-  path is broken. Call it before the app takes traffic so a wrong passphrase, missing keyring, or
-  unavailable KMS kills the deploy at boot. A wrap-only hybrid provider (public key only) fails by
-  design — it cannot serve decryption traffic.
-- **`pqc-config audit`** — keyless scan of a JSON config file for plaintext values that look like
-  secrets: sensitive key-name fragments (`password`, `secret`, `apikey`, `connectionstring`,
-  `credential`, `token`, …) and embedded credentials (`password=` inside a value). Suspect keys print
-  one per line; exit 1 if any are found — drop it into CI or a pre-commit hook. Stated plainly in the
-  output: a heuristic that catches the common cases, not proof the file holds no secrets.
-- **`pqc-config check`** — pre-deploy gate: test-decrypts every `pqc.v1` token in the file with the
-  key source you intend to deploy (`--keyring` or `--recipient`; `--bind-key` aware). Recovered
-  plaintext goes into a zeroable buffer and is discarded — never printed. `--require a,b,c` asserts
-  keys that must exist **and** be protected (a still-plaintext required key is reported as such).
-  Exit 1 on any failure: wrong keyring, missed re-seal after rotation, context mismatch, or an unmet
-  requirement all fail the build instead of the deploy.
-- **`docs/PQC-MIGRATION.md`** gains a "CI guardrails" section with a ready-to-paste GitHub Actions
-  gate and the startup self-test snippet.
-- **8 more tests** (116 total): self-test success and wrap-only failure, audit heuristics (sensitive
-  names, embedded credentials, protected values not flagged), and check (pass, wrong key source,
-  unmet requirements, binding honoured in both directions).
-
-## [1.2.0] — 2026-07-02
-
-Hybrid post-quantum workflows land in the CLI, plus a fail-closed hardening fix. No `pqc.v1`
-token-format change; the API change is additive-plus-one-contract-fix (below).
-
-### Added
-
-- **`pqc-config keygen`** — generate a hybrid **ML-KEM-768 + ECDH P-256** recipient key pair as two
-  self-describing key files (`pqc.hybrid.pub.v1.…` / `pqc.hybrid.key.v1.…`), so a public key can never
-  be mistaken for a private one, and passing the wrong file is a clear error. Never overwrites existing
-  key material. Prints the recipient fingerprint (`hk-…`) — the same key id `inspect` reports on tokens.
-  Requires the .NET 10 runtime; on older runtimes the command fails with a clear, actionable message.
-- **`--recipient <key file>`** on `protect`, `unprotect`, and `protect-file` — seal against a hybrid
-  recipient instead of the passphrase keyring. The public key seals (wrap-only: CI can mint tokens it
-  can never read back); decrypting requires the private key file, enforced up front with a clear error.
-- **`reprotect-file --to-recipient <public key file>`** — cross-provider migration: re-seal every
-  token in a JSON config file from the current key source onto hybrid post-quantum wrapping in one
-  atomic, all-or-nothing command. This is the "make my existing config post-quantum" operation.
-  Plaintext is handled through the zeroable `Secret` during migration.
-
-### Fixed
-
-- **The throwing `Unprotect` members now honour the opaque-failure contract for every unwrap
-  failure.** A token referencing a key the provider doesn't hold, a different provider family, or a
-  wrap-only (public key) provider used to let the key provider's own exception
-  (`KeyNotFoundException` / `InvalidOperationException`) escape from `Unprotect`, `UnprotectAsync`,
-  and `UnprotectToSecret`, where `ConfigurationProtectionException` is documented — and the raw
-  message distinguished failure modes. All unwrap failures now collapse to the single opaque
-  exception, matching `TryUnprotect` (which was already correct). Locked in by tests in both
-  directions across provider families and for the wrap-only case.
-
-## [1.1.0] — 2026-07-02
-
-Developer-experience release: whole-file workflows and keyless token inspection. Additive only — no
-breaking API change, no `pqc.v1` token-format change.
-
-### Added
-
-- **`pqc-config protect-file`** — bulk-seal string values in a JSON configuration file, in place.
-  Select with `--keys a,b,c` (exact keys; a missing or non-string key is an error, never a silent
-  skip), `--section <name>`, or `--all`; `--bind-key` binds each value to its configuration key;
-  `--dry-run` previews the affected keys without touching the file (and needs no keyring). Fail-closed
-  and atomic: the file is transformed in memory and atomically replaced only if every value seals.
-  Idempotent: existing tokens are skipped on re-run. Strict JSON only — comments/trailing commas are
-  rejected up front because a rewrite would silently destroy them.
-- **`pqc-config reprotect-file`** — after a `rotate`, re-seal every `pqc.v1` token in a JSON file
-  under the active key, all-or-nothing. Supports `--bind-key` and `--dry-run`.
-- **`pqc-config inspect`** — print a token's non-secret metadata (format version, provider id,
-  wrapping key id, wrap algorithm, ciphertext length) with **no keyring needed**. Output states
-  plainly that well-formed ≠ authentic.
-- **`ProtectedTokenInfo.TryInspect(token, out info)`** — the same keyless inspection as a public
-  library API. Non-throwing on hostile input. The key id makes stale tokens findable after a rotation
-  (pair with `Reprotect` / `ReprotectAllAsync`).
-- **`docs/PQC-MIGRATION.md`** — an honest adoption guide: the harvest-now-decrypt-later rationale, a
-  precise account of what each provider does and does not give you, the step-by-step migration, the
-  rotation runbook, and an FAQ.
-- **23 more tests** (101 total): inspection (hostile input, well-formed-vs-authentic, key-id-tracks-
-  rotation) and the file engine (selection semantics, idempotency, context binding, all-or-nothing
-  failure, strict-JSON load, atomic save).
-
 ## [1.0.0] — 2026-07-02
 
-First stable release. **No `pqc.v1` token-format change** — every token minted by any `0.x` preview
-still decrypts, and the format is now frozen.
+First stable release — the version published to NuGet.org. **No `pqc.v1` token-format change** —
+every token minted by any `0.x` preview still decrypts, and the format is now frozen.
 
 ### What `1.0` means (and what it does not)
 
@@ -111,10 +20,41 @@ still decrypts, and the format is now frozen.
   `pqc.v2.` and a major version ships with a cross-version reader for `pqc.v1`.
 - **Not an audit milestone.** An external security audit is **not currently scheduled** — `1.0` is a
   stability commitment, not a claim of independent review. The library remains
-  **not independently audited**; [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §6 keeps that gap on the record. No
-  code changed in this release beyond the dependency bump; the test-locked items of the internal
-  [self-review checklist](docs/security-review-checklist.md) were re-verified against
-  `PostQuantum.KeyManagement 1.0.1` (78 tests, zero skips, hybrid ML-KEM path exercised).
+  **not independently audited**; [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §6 keeps that gap on the record, and
+  the internal [self-review checklist](docs/security-review-checklist.md) was run for this release.
+
+### Added
+
+- **Whole-file CLI workflows** — `pqc-config protect-file` bulk-seals string values in a JSON config
+  file in place (`--keys` exact list where a missing or non-string key is an error, `--section`,
+  `--all`; `--bind-key` context binding; `--dry-run` preview needs no keyring). Strict-JSON parse
+  (comments would be destroyed by a rewrite, so they are rejected up front), in-memory transform, and
+  an atomic temp-file replace: any failure leaves the file byte-for-byte untouched; re-running is
+  harmless. `pqc-config reprotect-file` re-seals every token — onto the active key after a `rotate`,
+  all-or-nothing.
+- **Keyless token inspection** — `ProtectedTokenInfo.TryInspect(token, out info)` (library) and
+  `pqc-config inspect` (CLI): format version, provider id, **wrapping key id**, wrap algorithm, and
+  ciphertext length, with no key material. Non-throwing on hostile input; the key id makes tokens
+  still wrapped under a retired KEK findable after a rotation. Output states plainly that well-formed
+  ≠ authentic.
+- **Hybrid post-quantum workflows in the CLI** (.NET 10+; a clear, actionable error on older
+  runtimes) — `pqc-config keygen` generates an **ML-KEM-768 + ECDH P-256** recipient key pair as
+  self-describing key files (`pqc.hybrid.pub.v1.…` / `pqc.hybrid.key.v1.…`; never overwrites key
+  material); `--recipient` seals to the public key (wrap-only: CI can mint tokens it can never read
+  back) and opens with the private key file, enforced up front; `reprotect-file --to-recipient`
+  migrates a whole keyring-sealed file onto hybrid post-quantum wrapping in one atomic command.
+- **Defensive guardrails** — `pqc-config audit`: keyless heuristic scan for plaintext values that
+  look like secrets (sensitive key names, embedded `password=` credentials); exit 1 if any found —
+  CI/pre-commit friendly, and honest that a heuristic cannot prove absence of secrets.
+  `pqc-config check`: pre-deploy gate that test-decrypts every token with the key source you intend
+  to deploy (plaintext recovered into a zeroed buffer, never printed) and `--require`s keys that must
+  exist **and** be protected. `protector.VerifyAsync()` / `Verify()`: startup self-test that
+  round-trips a random canary so a broken key source fails the deploy at boot, not on the first
+  request (a wrap-only hybrid provider fails by design).
+- **`docs/PQC-MIGRATION.md`** — an honest adoption guide: the harvest-now-decrypt-later rationale, a
+  precise per-provider account of what "post-quantum" does and does not mean, the step-by-step
+  migration, the rotation runbook, CI guardrails with a ready-to-paste GitHub Actions gate, and an FAQ.
+- **38 more tests** (116 total, zero skips where ML-KEM is available).
 
 ### Changed
 
@@ -122,7 +62,19 @@ still decrypts, and the format is now frozen.
   (the whole `PostQuantum.*` suite is now on stable releases). No API or wire-format change; existing
   keyrings and tokens are unaffected.
 - Docs reworked for stable status: install commands no longer need `--prerelease`; the roadmap no
-  longer gates `1.0` on an external audit (see above); `SECURITY.md` support policy now covers `1.0.x`.
+  longer gates `1.0` on an external audit (see above); `SECURITY.md` support policy now covers `1.x`.
+- Publishing to NuGet.org is now automated in the release workflow via **NuGet Trusted Publishing**
+  (short-lived OIDC-exchanged credentials — no long-lived API key held anywhere).
+
+### Fixed
+
+- **The throwing `Unprotect` members now honour the opaque-failure contract for every unwrap
+  failure.** A token referencing a key the provider doesn't hold, a different provider family, or a
+  wrap-only (public key) provider let the key provider's own exception (`KeyNotFoundException` /
+  `InvalidOperationException`) escape from `Unprotect`, `UnprotectAsync`, and `UnprotectToSecret`,
+  where `ConfigurationProtectionException` is documented — and the raw message distinguished failure
+  modes. All unwrap failures now collapse to the single opaque exception, matching `TryUnprotect`
+  (which was already correct). Locked in by tests across provider families and for the wrap-only case.
 
 ## [0.2.0-preview.2] — 2026-06-03
 
@@ -222,9 +174,6 @@ First public preview.
   Grover). No asymmetric ML-KEM is shipped. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 - **Not independently audited.** Treat the API and token format as unstable until `1.0`.
 
-[1.3.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.3.0
-[1.2.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.2.0
-[1.1.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.1.0
 [1.0.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.0.0
 [0.2.0-preview.2]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.2
 [0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.1
