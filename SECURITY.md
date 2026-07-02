@@ -8,7 +8,7 @@ Use GitHub's **“Report a vulnerability”** button on the repository
 (`Security` → `Report a vulnerability`), or email the maintainer privately. Include:
 
 - a description of the issue and its impact,
-- the version (`0.1.0-preview.1`, commit if building from source),
+- the version (`1.0.0`, commit if building from source),
 - a minimal reproduction if you have one.
 
 You will get an acknowledgement, and a fix or mitigation plan once the report is triaged. Please give a
@@ -16,13 +16,18 @@ reasonable window to respond before any public disclosure.
 
 ## Supported versions
 
-This project is in preview. Only the **latest `0.x` preview** receives security fixes. There are no
-backports to earlier previews.
+Security fixes ship for the **latest `1.x` release**. The `0.x` previews are unsupported — upgrade to
+`1.0.0` or later (every `0.x` token still decrypts; the upgrade is drop-in).
 
 | Version | Supported |
 |---|---|
-| `0.1.0-preview.*` (latest) | ✅ |
-| anything older | ❌ |
+| `1.x` (latest) | ✅ |
+| `0.x` previews | ❌ |
+
+An external security audit of this library is **not currently scheduled** — `1.0` is a stability
+commitment (frozen API and token format), not an audit claim. See
+[`KNOWN-GAPS.md` §6](KNOWN-GAPS.md) for the full statement, and please reach out if you can review or
+sponsor a review.
 
 ## What this library protects — and what it relies on
 

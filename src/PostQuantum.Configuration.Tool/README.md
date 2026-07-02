@@ -6,7 +6,7 @@ seal, open, and rotate encrypted configuration values from a shell or CI pipelin
 ## Install
 
 ```bash
-dotnet tool install --global PostQuantum.Configuration.Tool --prerelease
+dotnet tool install --global PostQuantum.Configuration.Tool
 ```
 
 ## Use

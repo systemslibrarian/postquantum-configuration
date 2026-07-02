@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <!-- The post-quantum-ready envelope-encryption + key-rotation engine we build on. -->
-    <PackageVersion Include="PostQuantum.KeyManagement" Version="0.4.0-preview.2" />
+    <PackageVersion Include="PostQuantum.KeyManagement" Version="1.0.1" />
 
     <!-- Microsoft.Extensions.* surface the library integrates with. Kept on 8.0.x so the
          package installs cleanly into net8.0 hosts and floats forward on net9/net10. -->
