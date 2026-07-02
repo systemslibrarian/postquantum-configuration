@@ -6,11 +6,13 @@ appsettings sections — for .NET 8, 9, and 10.**
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Target](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-> **Status: `0.2.0-preview.1`.** The API and token format may change before `1.0`. **Not independently
-> audited.** See [Security posture](#security-posture), [`SECURITY.md`](SECURITY.md), and
+> **Status: `1.0.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
+> SemVer; every token minted by a `0.x` preview still decrypts. **Not independently audited** — an
+> external audit is not currently scheduled, and `1.0` is a stability commitment, not an audit claim.
+> See [Security posture](#security-posture), [`SECURITY.md`](SECURITY.md), and
 > [`KNOWN-GAPS.md`](KNOWN-GAPS.md) — we would rather under-claim than overstate.
 >
-> **New in 0.2:** an optional [hybrid post-quantum key-wrapping provider](#optional-hybrid-post-quantum-key-wrapping-ml-kem-768--ecdh-p-256)
+> Ships with an optional [hybrid post-quantum key-wrapping provider](#optional-hybrid-post-quantum-key-wrapping-ml-kem-768--ecdh-p-256)
 > (ML-KEM-768 + ECDH P-256), a [zeroable `Secret`](#avoiding-lingering-plaintext-with-secret) return
 > type, [re-seal helpers](#re-sealing-after-rotation) for rotation, and the
 > [`pqc-config` CLI](#cli-pqc-config).
@@ -100,7 +102,7 @@ primitives are the ones the .NET BCL already ships.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.Configuration --prerelease
+dotnet add package PostQuantum.Configuration
 ```
 
 This pulls in [`PostQuantum.KeyManagement`](https://www.nuget.org/packages/PostQuantum.KeyManagement)
@@ -281,7 +283,7 @@ A companion `dotnet` tool ([`PostQuantum.Configuration.Tool`](src/PostQuantum.Co
 protects, unprotects, and rotates from a shell or CI pipeline:
 
 ```bash
-dotnet tool install --global PostQuantum.Configuration.Tool --prerelease
+dotnet tool install --global PostQuantum.Configuration.Tool
 
 export PQC_PASSPHRASE='a strong passphrase'           # keep secrets out of shell history
 echo 'Host=db;Password=s3cr3t' | pqc-config protect --keyring keyring.txt   # -> pqc.v1.…
@@ -364,7 +366,9 @@ to match the provider you deploy, and see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for t
   and treat the passphrase as a real secret.
 - **Not a vault.** No access policies, no audit log, no per-secret authorisation. Pair with one for
   those properties.
-- **Preview.** Treat the API and `pqc.v1` token format as unstable until `1.0`.
+- **Not independently audited.** The API and `pqc.v1` token format are stable (SemVer, as of `1.0`),
+  but no third party has reviewed the code, and an external audit is not currently scheduled — see
+  [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §6.
 
 Full detail: [`SECURITY.md`](SECURITY.md), [`docs/threat-model.md`](docs/threat-model.md),
 [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
@@ -398,15 +402,16 @@ This package is built for verifiable provenance:
 - **Verify a downloaded package** before trusting it:
 
   ```bash
-  # NuGet signature (author + repository countersignature)
-  dotnet nuget verify PostQuantum.Configuration.0.1.0-preview.1.nupkg
+  # NuGet signature (repository countersignature)
+  dotnet nuget verify PostQuantum.Configuration.1.0.0.nupkg
 
   # Pin and restore with integrity checking
   dotnet restore --locked-mode      # honours packages.lock.json hashes
   ```
 
-What is **not** yet in place is stated plainly in [`docs/supply-chain.md`](docs/supply-chain.md): an
-author code-signing certificate and an external security audit are still roadmap.
+What is **not** in place is stated plainly in [`docs/supply-chain.md`](docs/supply-chain.md): an author
+code-signing certificate is still roadmap, and an external security audit is **not currently
+scheduled** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §6).
 
 ## Samples
 
@@ -436,7 +441,7 @@ See [`samples/`](samples/):
 
 ```bash
 dotnet build       # builds net8.0, net9.0, net10.0 — zero warnings (warnings are errors)
-dotnet test        # 69 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
+dotnet test        # 78 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
 dotnet format --verify-no-changes
 dotnet pack -c Release
 ```
@@ -445,24 +450,25 @@ The hybrid ML-KEM tests skip themselves (with a clear reason) on hosts without M
 .NET 10 with OpenSSL 3.5+ — for example, point the runtime at a newer OpenSSL:
 
 ```bash
-LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 69 tests, zero skips
+LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 78 tests, zero skips
 ```
 
 ## Project status & roadmap
 
-`0.2.0-preview.1` — the 0.1 roadmap is **done**: the `pqc-config` CLI, the zeroable `Secret` return, the
-`Reprotect` / `ReprotectAllAsync` re-seal helpers, and the hybrid **ML-KEM-768 + ECDH P-256** provider
-all ship and are tested. Core protect / unprotect, the transparent `IConfiguration` layer, DI, and
-context binding are complete. The API and token format are not yet frozen.
+`1.0.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
+binding, key rotation with `Reprotect` / `ReprotectAllAsync`, the zeroable `Secret` return, the hybrid
+**ML-KEM-768 + ECDH P-256** provider, and the `pqc-config` CLI all ship and are tested (78 tests, zero
+skips where ML-KEM is available). The public API and the `pqc.v1` token format are **frozen** under
+SemVer, and the whole `PostQuantum.*` dependency chain is on stable releases.
 
-**Toward `1.0`** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the honest gap list):
+**Beyond `1.0`** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the honest gap list):
 
-1. **External security review** of the envelope and the hybrid combiner — the prerequisite for dropping
-   the "unaudited" caveat and for a stable `1.0`.
+1. **External security review** of the envelope and the hybrid combiner. **Not currently scheduled** —
+   `1.0` marks stability, not an audit; the "unaudited" caveat stays until a real review happens. If you
+   can review or sponsor a review, please reach out.
 2. **Author code-signing certificate** to complement the build-provenance attestations already produced.
 3. **Standardised hybrid** — track the IETF/NIST hybrid-KEM work and align the construction with a named
-   scheme once one stabilises.
-4. **Freeze the API and `pqc.v1` token format** and commit to SemVer wire-compatibility.
+   scheme (e.g. X-Wing) once one stabilises in the BCL.
 
 ## License
 

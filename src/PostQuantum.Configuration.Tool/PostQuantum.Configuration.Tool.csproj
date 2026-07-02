@@ -19,7 +19,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>PostQuantum.Configuration.Tool</PackageId>
-    <Version>0.2.0-preview.2</Version>
+    <Version>1.0.0</Version>
     <Title>pqc-config — CLI for PostQuantum.Configuration</Title>
     <Description>Command-line companion to PostQuantum.Configuration. Seal (protect), open (unprotect), and rotate keys for encrypted configuration values from a shell or CI pipeline, backed by a persisted PostQuantum.KeyManagement keyring. Read values from stdin to keep secrets out of shell history. See the PostQuantum.Configuration package for the library.</Description>
     <PackageTags>post-quantum;pqc;configuration;secrets;cli;dotnet-tool;encryption;aes-gcm</PackageTags>

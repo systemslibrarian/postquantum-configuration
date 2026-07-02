@@ -6,7 +6,7 @@ only holds ciphertext and my app still works unchanged.”
 ## 1. Install
 
 ```bash
-dotnet add package PostQuantum.Configuration --prerelease
+dotnet add package PostQuantum.Configuration
 ```
 
 ## 2. Choose where the key comes from
@@ -105,8 +105,12 @@ keys.Rotate("a new passphrase", LocalKekOptions.Interactive);
 // Old tokens still open (previous KEKs are retained); new Protect() calls use the new active KEK.
 ```
 
-To physically re-seal stored values under the new key, `Unprotect` then `Protect` them again. A
-bulk-rewrap helper is on the roadmap ([`KNOWN-GAPS.md` §4](../KNOWN-GAPS.md)).
+To physically re-seal stored values under the new key, use the re-seal helpers:
+
+```csharp
+string fresh = protector.Reprotect(oldToken);          // one value
+int resealed = await protector.ReprotectAllAsync(map); // a whole map, all-or-nothing
+```
 
 ---
 

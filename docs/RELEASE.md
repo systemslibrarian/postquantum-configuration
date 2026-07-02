@@ -11,11 +11,11 @@ automated, and — honestly — what is still manual or missing.
 2. **Green local build.** `dotnet build -c Release` (zero warnings), `dotnet test` (zero failures), and
    `dotnet format --verify-no-changes`. Run the ML-KEM tests on a host with ML-KEM available (.NET 10 +
    OpenSSL 3.5) so the hybrid path is exercised, not just skipped.
-3. **Tag.** `git tag v0.2.0-preview.1 && git push origin v0.2.0-preview.1`.
+3. **Tag.** `git tag v1.0.0 && git push origin v1.0.0`.
 4. **CI release workflow** (`.github/workflows/release.yml`) runs on the tag: restore → format check →
    build → test → pack (library + tool) → SBOM → **build-provenance attestation** → upload artifacts.
-5. **Review and publish.** Until `1.0`, publishing to NuGet.org is a deliberate, manual step after the
-   workflow's artifacts are reviewed.
+5. **Review and publish.** Publishing to NuGet.org is a deliberate, manual step after the workflow's
+   artifacts are reviewed.
 
 ## What each release carries
 
@@ -27,7 +27,7 @@ automated, and — honestly — what is still manual or missing.
 | Build-provenance attestation | ✅ | `actions/attest-build-provenance` over the `.nupkg`s |
 | NuGet repository signature | ✅ (on publish) | Added by NuGet.org |
 | Author code-signing | ❌ | No certificate yet — see [`supply-chain.md`](supply-chain.md) |
-| External security audit | ❌ | Roadmap before stable `1.0` |
+| External security audit | ❌ | Not currently scheduled — see [`KNOWN-GAPS.md` §6](../KNOWN-GAPS.md) |
 
 ## Verifying an attestation
 

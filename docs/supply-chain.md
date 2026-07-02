@@ -22,9 +22,9 @@ We will not imply provenance we don't have.
 
 | Signal | Status | Plan |
 |---|---|---|
-| **Author code-signing certificate** | ❌ | The `.nupkg` carries NuGet.org's repository signature once published, and a build-provenance attestation, but not an author code signature. A code-signing cert is roadmap before `1.0`. |
+| **Author code-signing certificate** | ❌ | The `.nupkg` carries NuGet.org's repository signature once published, and a build-provenance attestation, but not an author code signature. A code-signing cert remains on the roadmap. |
 | **Reproducible-build verification by a third party** | ❌ | Builds are deterministic; no independent rebuild-and-compare is published yet. |
-| **External security audit** | ❌ | Roadmap before stable `1.0` (see [`KNOWN-GAPS.md` §6](../KNOWN-GAPS.md)). An internal [self-review checklist](security-review-checklist.md) runs each release. |
+| **External security audit** | ❌ | **Not currently scheduled** — `1.0` shipped as a stability commitment, not an audit milestone (see [`KNOWN-GAPS.md` §6](../KNOWN-GAPS.md)). An internal [self-review checklist](security-review-checklist.md) runs each release. |
 
 ## Verifying a release
 

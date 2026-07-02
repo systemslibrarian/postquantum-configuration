@@ -2,8 +2,36 @@
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
-[Semantic Versioning](https://semver.org/). While in `0.x` preview, **minor versions may break** the
-API or the `pqc.v1` token format; the prefix version will change if the wire format changes.
+[Semantic Versioning](https://semver.org/). As of `1.0.0` the public API and the `pqc.v1` token format
+are **frozen**: breaking either requires a major version, and a wire-format change will always change
+the token prefix (`pqc.vN.`) so old and new tokens are distinguishable. (During the `0.x` previews,
+minor versions were allowed to break both.)
+
+## [1.0.0] — 2026-07-02
+
+First stable release. **No `pqc.v1` token-format change** — every token minted by any `0.x` preview
+still decrypts, and the format is now frozen.
+
+### What `1.0` means (and what it does not)
+
+- **API frozen.** The public surface of `PostQuantum.Configuration` follows SemVer from here: breaking
+  changes only in a major version.
+- **Token format frozen.** `pqc.v1` is stable. If the wire format ever changes, the prefix becomes
+  `pqc.v2.` and a major version ships with a cross-version reader for `pqc.v1`.
+- **Not an audit milestone.** An external security audit is **not currently scheduled** — `1.0` is a
+  stability commitment, not a claim of independent review. The library remains
+  **not independently audited**; [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §6 keeps that gap on the record. No
+  code changed in this release beyond the dependency bump; the test-locked items of the internal
+  [self-review checklist](docs/security-review-checklist.md) were re-verified against
+  `PostQuantum.KeyManagement 1.0.1` (78 tests, zero skips, hybrid ML-KEM path exercised).
+
+### Changed
+
+- **`PostQuantum.KeyManagement` dependency upgraded** from `0.4.0-preview.2` to the stable **`1.0.1`**
+  (the whole `PostQuantum.*` suite is now on stable releases). No API or wire-format change; existing
+  keyrings and tokens are unaffected.
+- Docs reworked for stable status: install commands no longer need `--prerelease`; the roadmap no
+  longer gates `1.0` on an external audit (see above); `SECURITY.md` support policy now covers `1.0.x`.
 
 ## [0.2.0-preview.2] — 2026-06-03
 
@@ -103,5 +131,7 @@ First public preview.
   Grover). No asymmetric ML-KEM is shipped. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 - **Not independently audited.** Treat the API and token format as unstable until `1.0`.
 
+[1.0.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.0.0
+[0.2.0-preview.2]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.2
 [0.2.0-preview.1]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.1
 [0.1.0-preview.1]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.1.0-preview.1
