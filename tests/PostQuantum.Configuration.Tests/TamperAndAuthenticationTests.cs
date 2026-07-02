@@ -64,6 +64,11 @@ public sealed class TamperAndAuthenticationTests
         {
             string token = alice.Protect("alice's secret");
             Assert.False(bob.TryUnprotect(token, out _));
+
+            // The throwing members must honour the same opaque contract — the provider's own
+            // exception (unknown key id, wrong provider family) must never escape raw.
+            Assert.Throws<ConfigurationProtectionException>(() => bob.Unprotect(token));
+            Assert.Throws<ConfigurationProtectionException>(() => bob.UnprotectToSecret(token));
         }
     }
 

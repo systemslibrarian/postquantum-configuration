@@ -101,11 +101,7 @@ public sealed class PostQuantumConfigProtector : IConfigurationProtector
             plaintext = value.Decrypt(contentKey, context);
             return true;
         }
-        catch (Exception ex) when (ex
-            is ConfigurationProtectionException             // malformed token / failed authentication
-            or KeyNotFoundException                          // token references a KEK this provider doesn't hold
-            or InvalidOperationException                     // wrong provider family, etc.
-            or System.Security.Cryptography.CryptographicException)
+        catch (ConfigurationProtectionException)
         {
             // Tampered ciphertext, wrong key/provider, or context mismatch — all reported as a plain
             // "could not unprotect" so the caller never has to distinguish failure modes.
@@ -114,6 +110,22 @@ public sealed class PostQuantumConfigProtector : IConfigurationProtector
         }
     }
 
-    private ValueTask<ContentKey> UnwrapAsync(ProtectedValue value, CancellationToken cancellationToken) =>
-        _keyProvider.UnwrapAsync(value.WrappedKey, cancellationToken);
+    private async ValueTask<ContentKey> UnwrapAsync(ProtectedValue value, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _keyProvider.UnwrapAsync(value.WrappedKey, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex
+            is KeyNotFoundException                          // token references a KEK this provider doesn't hold
+            or InvalidOperationException                     // wrong provider family, wrap-only provider, etc.
+            or System.Security.Cryptography.CryptographicException)
+        {
+            // Every unwrap failure collapses to the one opaque failure type here, so all Unprotect
+            // members — throwing and Try alike — honour the fail-closed contract: a caller can never
+            // distinguish "unknown key" from "wrong provider" from "tampered" by exception shape.
+            throw new ConfigurationProtectionException(
+                "The protected configuration value failed authentication and could not be decrypted.", ex);
+        }
+    }
 }

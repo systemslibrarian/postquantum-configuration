@@ -6,7 +6,7 @@ appsettings sections — for .NET 8, 9, and 10.**
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Target](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-> **Status: `1.0.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
+> **Status: `1.3.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
 > SemVer; every token minted by a `0.x` preview still decrypts. **Not independently audited** — an
 > external audit is not currently scheduled, and `1.0` is a stability commitment, not an audit claim.
 > See [Security posture](#security-posture), [`SECURITY.md`](SECURITY.md), and
@@ -25,6 +25,7 @@ appsettings sections — for .NET 8, 9, and 10.**
 - [When to use this (and when not to)](#when-to-use-this-and-when-not-to)
 - [Install](#install)
 - [60-second tour](#60-second-tour)
+- [Adopting a post-quantum posture (migration guide)](docs/PQC-MIGRATION.md)
 - [Usage](#usage)
   - [Protect and read a value](#protect-and-read-a-value)
   - [Transparent decryption in `IConfiguration`](#transparent-decryption-in-iconfiguration)
@@ -269,7 +270,8 @@ string secret = new PostQuantumConfigProtector(opener).Unprotect(token);
 ```
 
 `HybridKemContentKeyProvider` is an `IContentKeyProvider`, so it drops into everything above —
-`AddEncrypted`, DI, `Reprotect`, `Secret`.
+`AddEncrypted`, DI, `Reprotect`, `Secret`. The same workflow is available from the shell:
+`pqc-config keygen` / `--recipient` / `reprotect-file --to-recipient` (see [CLI](#cli-pqc-config)).
 
 > **Requirements & honesty.** Needs **.NET 10+** and a platform where ML-KEM is available (on Linux,
 > **OpenSSL 3.5+**); the factory methods throw `PlatformNotSupportedException` otherwise. The combiner
@@ -280,7 +282,8 @@ string secret = new PostQuantumConfigProtector(opener).Unprotect(token);
 ### CLI: `pqc-config`
 
 A companion `dotnet` tool ([`PostQuantum.Configuration.Tool`](src/PostQuantum.Configuration.Tool))
-protects, unprotects, and rotates from a shell or CI pipeline:
+covers the whole lifecycle from a shell or CI pipeline — single values, whole config files, rotation,
+and keyless token inspection:
 
 ```bash
 dotnet tool install --global PostQuantum.Configuration.Tool
@@ -288,8 +291,37 @@ dotnet tool install --global PostQuantum.Configuration.Tool
 export PQC_PASSPHRASE='a strong passphrase'           # keep secrets out of shell history
 echo 'Host=db;Password=s3cr3t' | pqc-config protect --keyring keyring.txt   # -> pqc.v1.…
 pqc-config unprotect --keyring keyring.txt --token pqc.v1.…
-pqc-config rotate    --keyring keyring.txt            # fresh key, old tokens still open
+
+# Bulk-seal an appsettings.json — atomic (all values seal, or the file is untouched),
+# idempotent (existing tokens are skipped), previewable (--dry-run needs no keys):
+pqc-config protect-file --keyring keyring.txt --file appsettings.json --section ConnectionStrings
+pqc-config protect-file --file appsettings.json --all --dry-run
+
+# Rotate, then migrate every token in the file onto the new key — all-or-nothing:
+pqc-config rotate         --keyring keyring.txt
+pqc-config reprotect-file --keyring keyring.txt --file appsettings.json
+
+# Inspect a token's non-secret metadata (which key wraps it?) — no keyring needed:
+pqc-config inspect --token pqc.v1.…
+
+# Hybrid post-quantum key wrapping from the shell (.NET 10+): generate a recipient
+# key pair, seal with the PUBLIC key (CI can mint tokens it can never read back),
+# open with the private key — and migrate an existing keyring-sealed file onto
+# hybrid ML-KEM wrapping in one atomic command:
+pqc-config keygen --public recipient.pub --private recipient.key
+pqc-config protect-file --recipient recipient.pub --file appsettings.json --all
+pqc-config unprotect    --recipient recipient.key --token pqc.v1.…
+pqc-config reprotect-file --keyring keyring.txt --to-recipient recipient.pub --file appsettings.json
+
+# CI guardrails — fail the build on plaintext secrets (keyless heuristic scan) or on
+# tokens that won't decrypt with the key source you intend to deploy:
+pqc-config audit --file appsettings.json
+pqc-config check --keyring keyring.txt --file appsettings.json --require ConnectionStrings:Default
 ```
+
+`--bind-key` on the file commands binds each value to its configuration key (context binding, above).
+The end-to-end walkthrough — including why and when — is in
+[`docs/PQC-MIGRATION.md`](docs/PQC-MIGRATION.md).
 
 ## Token format
 
@@ -323,6 +355,8 @@ giant allocation or an out-of-bounds read.
 | `config.GetDecrypted(key, protector)` | Explicit decrypt-on-read for one value. |
 | `protector.DecryptIfProtected(value)` | Decrypt if it's a token, pass through otherwise. |
 | `protector.Reprotect` / `ReprotectAllAsync` | Re-seal values under the active key after rotation. |
+| `ProtectedTokenInfo.TryInspect(token, out info)` | Keyless, non-throwing token inspection: format version, provider, wrapping key id (find stale tokens after rotation). |
+| `protector.VerifyAsync()` / `Verify()` | Startup self-test: round-trips a random canary so a broken key source fails the deploy at boot, not on the first request. |
 | `services.AddPostQuantumConfiguration()` | DI registration over a registered `IContentKeyProvider`. |
 | `HybridKemContentKeyProvider` *(net10+)* | Hybrid ML-KEM-768 + ECDH P-256 key-wrapping `IContentKeyProvider`. |
 | `pqc-config` *(separate tool package)* | CLI to protect / unprotect / rotate. |
@@ -441,7 +475,7 @@ See [`samples/`](samples/):
 
 ```bash
 dotnet build       # builds net8.0, net9.0, net10.0 — zero warnings (warnings are errors)
-dotnet test        # 78 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
+dotnet test        # 116 tests; hybrid ML-KEM tests run where ML-KEM is available, skip cleanly otherwise
 dotnet format --verify-no-changes
 dotnet pack -c Release
 ```
@@ -450,16 +484,17 @@ The hybrid ML-KEM tests skip themselves (with a clear reason) on hosts without M
 .NET 10 with OpenSSL 3.5+ — for example, point the runtime at a newer OpenSSL:
 
 ```bash
-LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 78 tests, zero skips
+LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 116 tests, zero skips
 ```
 
 ## Project status & roadmap
 
-`1.0.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
-binding, key rotation with `Reprotect` / `ReprotectAllAsync`, the zeroable `Secret` return, the hybrid
-**ML-KEM-768 + ECDH P-256** provider, and the `pqc-config` CLI all ship and are tested (78 tests, zero
-skips where ML-KEM is available). The public API and the `pqc.v1` token format are **frozen** under
-SemVer, and the whole `PostQuantum.*` dependency chain is on stable releases.
+`1.3.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
+binding, key rotation with `Reprotect` / `ReprotectAllAsync`, the zeroable `Secret` return, keyless
+token inspection (`ProtectedTokenInfo`), the hybrid **ML-KEM-768 + ECDH P-256** provider, and the
+`pqc-config` CLI — including whole-file `protect-file` / `reprotect-file` — all ship and are tested
+(116 tests, zero skips where ML-KEM is available). The public API and the `pqc.v1` token format are
+**frozen** under SemVer, and the whole `PostQuantum.*` dependency chain is on stable releases.
 
 **Beyond `1.0`** (see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for the honest gap list):
 

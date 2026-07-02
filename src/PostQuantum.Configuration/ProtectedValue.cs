@@ -53,6 +53,9 @@ internal sealed class ProtectedValue
     /// <summary>The wrapped content key required to recover the DEK via <see cref="IContentKeyProvider.UnwrapAsync"/>.</summary>
     internal WrappedContentKey WrappedKey => _wrappedKey;
 
+    /// <summary>The AES-256-GCM ciphertext length in bytes (equal to the plaintext's UTF-8 byte length).</summary>
+    internal int CiphertextLength => _ciphertext.Length;
+
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="value"/> begins with the protected-value token
     /// prefix. This is a cheap structural check, not a guarantee that the token decrypts.

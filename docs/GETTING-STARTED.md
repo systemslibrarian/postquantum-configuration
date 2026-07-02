@@ -32,8 +32,17 @@ builder.Services.AddPostQuantumConfiguration();  // registers IConfigurationProt
 
 ## 3. Mint a token for each secret
 
-A protected value is just a string. Mint one however you like — a throwaway console app, an admin
-endpoint (see the `WebApi` sample's `/secrets/protect`), or `dotnet run` against a snippet:
+The fastest path is the CLI, which can seal a whole section of `appsettings.json` in one atomic step
+(see [`PQC-MIGRATION.md`](PQC-MIGRATION.md) for the full walkthrough):
+
+```bash
+dotnet tool install --global PostQuantum.Configuration.Tool
+export PQC_PASSPHRASE='a strong passphrase'
+pqc-config protect-file --keyring keyring.txt --file appsettings.json --section ConnectionStrings
+```
+
+Or mint tokens one at a time however you like — a throwaway console app, an admin endpoint (see the
+`WebApi` sample's `/secrets/protect`), or `dotnet run` against a snippet:
 
 ```csharp
 using var keys = LocalContentKeyProvider.Create(passphrase, LocalKekOptions.Interactive);
