@@ -1,0 +1,10 @@
+# Normalise to LF in the repository AND in every working copy, regardless of the
+# machine's core.autocrlf. The .editorconfig (and dotnet format's ENDOFLINE rule)
+# require LF, so a CRLF checkout on Windows would fail `dotnet format --verify-no-changes`.
+* text=auto eol=lf
+
+# Binary content — never normalise.
+*.png binary
+*.jpg binary
+*.snk binary
+*.key binary

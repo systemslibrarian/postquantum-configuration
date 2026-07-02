@@ -6,7 +6,7 @@ appsettings sections — for .NET 8, 9, and 10.**
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Target](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-> **Status: `1.3.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
+> **Status: `1.0.0` — stable.** The public API and the `pqc.v1` token format are **frozen** and follow
 > SemVer; every token minted by a `0.x` preview still decrypts. **Not independently audited** — an
 > external audit is not currently scheduled, and `1.0` is a stability commitment, not an audit claim.
 > See [Security posture](#security-posture), [`SECURITY.md`](SECURITY.md), and
@@ -489,7 +489,7 @@ LD_LIBRARY_PATH=/path/to/openssl-3.5/lib dotnet test   # 116 tests, zero skips
 
 ## Project status & roadmap
 
-`1.3.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
+`1.0.0` — **stable**. Core protect / unprotect, the transparent `IConfiguration` layer, DI, context
 binding, key rotation with `Reprotect` / `ReprotectAllAsync`, the zeroable `Secret` return, keyless
 token inspection (`ProtectedTokenInfo`), the hybrid **ML-KEM-768 + ECDH P-256** provider, and the
 `pqc-config` CLI — including whole-file `protect-file` / `reprotect-file` — all ship and are tested

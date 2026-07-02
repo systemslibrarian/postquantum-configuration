@@ -13,9 +13,12 @@ automated, and — honestly — what is still manual or missing.
    OpenSSL 3.5) so the hybrid path is exercised, not just skipped.
 3. **Tag.** `git tag v1.0.0 && git push origin v1.0.0`.
 4. **CI release workflow** (`.github/workflows/release.yml`) runs on the tag: restore → format check →
-   build → test → pack (library + tool) → SBOM → **build-provenance attestation** → upload artifacts.
-5. **Review and publish.** Publishing to NuGet.org is a deliberate, manual step after the workflow's
-   artifacts are reviewed.
+   build → test → pack (library + tool) → SBOM → **build-provenance attestation** → upload artifacts →
+   **publish to NuGet.org via Trusted Publishing**. The workflow exchanges its OIDC identity for a
+   short-lived API key under the trust policy configured on NuGet.org — no long-lived API key exists
+   anywhere.
+5. **Verify.** After the run: `gh attestation verify` on the `.nupkg` (below), and confirm the package
+   page on NuGet.org.
 
 ## What each release carries
 
@@ -25,6 +28,7 @@ automated, and — honestly — what is still manual or missing.
 | SourceLink + symbols | ✅ | `.snupkg` published |
 | SBOM (CycloneDX) | ✅ | `build/generate-sbom.sh`, committed under `sbom/` |
 | Build-provenance attestation | ✅ | `actions/attest-build-provenance` over the `.nupkg`s |
+| NuGet publish (Trusted Publishing, OIDC) | ✅ | `NuGet/login` in `release.yml`; no stored API key |
 | NuGet repository signature | ✅ (on publish) | Added by NuGet.org |
 | Author code-signing | ❌ | No certificate yet — see [`supply-chain.md`](supply-chain.md) |
 | External security audit | ❌ | Not currently scheduled — see [`KNOWN-GAPS.md` §6](../KNOWN-GAPS.md) |

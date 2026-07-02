@@ -13,6 +13,7 @@ Honest accounting of what provenance signals this package carries — and what i
 | **Lock file restore** | ✅ (opt-in) | `dotnet restore --locked-mode` honours `packages.lock.json` hashes. Generate with `dotnet restore --use-lock-file`. |
 | **SBOM (CycloneDX)** | ✅ | `./build/generate-sbom.sh` → `sbom/PostQuantum.Configuration.cdx.json`. |
 | **Build-provenance attestation** | ✅ | `actions/attest-build-provenance` over every `.nupkg` in `release.yml`. Verify with `gh attestation verify`. |
+| **Trusted Publishing (no long-lived API key)** | ✅ | Publishing exchanges the release workflow's OIDC identity for a short-lived key under the NuGet.org trust policy — there is no stored NuGet API key to leak. |
 | **README + license in package** | ✅ | `PackageReadmeFile`, `PackageLicenseExpression=MIT`. |
 | **MIT license, explicit copyright** | ✅ | `LICENSE`, `Copyright` property. |
 
