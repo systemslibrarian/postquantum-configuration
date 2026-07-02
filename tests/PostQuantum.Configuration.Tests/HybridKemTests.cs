@@ -58,8 +58,9 @@ public sealed class HybridKemTests
         // The sender (public-only) seals…
         string token = new PostQuantumConfigProtector(sealer).Protect("for the recipient only");
 
-        // …the sender cannot open it…
-        Assert.Throws<InvalidOperationException>(() => new PostQuantumConfigProtector(sealer).Unprotect(token));
+        // …the sender cannot open it — and, per the opaque-failure contract, the wrap-only
+        // condition surfaces as the one ConfigurationProtectionException, never a raw provider error.
+        Assert.Throws<ConfigurationProtectionException>(() => new PostQuantumConfigProtector(sealer).Unprotect(token));
 
         // …but the recipient (private) can.
         Assert.Equal("for the recipient only", new PostQuantumConfigProtector(recipient).Unprotect(token));

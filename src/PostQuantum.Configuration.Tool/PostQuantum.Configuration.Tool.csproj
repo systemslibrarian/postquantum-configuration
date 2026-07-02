@@ -19,9 +19,9 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>PostQuantum.Configuration.Tool</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Title>pqc-config — CLI for PostQuantum.Configuration</Title>
-    <Description>Command-line companion to PostQuantum.Configuration. Seal (protect), open (unprotect), and rotate keys for encrypted configuration values from a shell or CI pipeline, backed by a persisted PostQuantum.KeyManagement keyring. Bulk-seal or re-seal whole appsettings.json files atomically (protect-file / reprotect-file), and inspect a token's non-secret metadata without any keys (inspect). Read values from stdin to keep secrets out of shell history. See the PostQuantum.Configuration package for the library.</Description>
+    <Description>Command-line companion to PostQuantum.Configuration. Seal (protect), open (unprotect), and rotate keys for encrypted configuration values from a shell or CI pipeline, backed by a persisted PostQuantum.KeyManagement keyring. Bulk-seal or re-seal whole appsettings.json files atomically (protect-file / reprotect-file), inspect a token's non-secret metadata without any keys (inspect), and — on .NET 10+ — generate hybrid ML-KEM-768 + ECDH P-256 recipient key pairs (keygen), seal to a recipient's public key (--recipient), and migrate a keyring-sealed file onto post-quantum hybrid wrapping (reprotect-file --to-recipient). Read values from stdin to keep secrets out of shell history. See the PostQuantum.Configuration package for the library.</Description>
     <PackageTags>post-quantum;pqc;configuration;secrets;cli;dotnet-tool;encryption;aes-gcm</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

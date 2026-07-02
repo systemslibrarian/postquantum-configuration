@@ -179,7 +179,7 @@ public class FileProtectionTests
                 root, protector, KeySelector.FromOptions(null, "ConnectionStrings", all: false), bindKeyAsContext: false, dryRun: false);
 
             string newActiveKeyId = provider.Rotate(TestKeys.Passphrase, LocalKekOptions.LowMemory);
-            FileProtectionResult result = FileProtection.Reprotect(root, protector, bindKeyAsContext: false, dryRun: false);
+            FileProtectionResult result = FileProtection.Reprotect(root, protector, protector, bindKeyAsContext: false, dryRun: false);
 
             Assert.Equal(2, result.ChangedKeys.Count);
             string token = (string)root["ConnectionStrings"]!["Default"]!;
@@ -200,7 +200,7 @@ public class FileProtectionTests
             // the transform throws, so the command never reaches Save() and the file is never touched.
             JsonObject root = Parse("""{ "A": "pqc.v1.AQAAbogus", "B": "plain" }""");
             Assert.Throws<ConfigurationProtectionException>(
-                () => FileProtection.Reprotect(root, protector, bindKeyAsContext: false, dryRun: false));
+                () => FileProtection.Reprotect(root, protector, protector, bindKeyAsContext: false, dryRun: false));
         }
     }
 

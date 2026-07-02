@@ -52,6 +52,28 @@ it was. `protect-file` is idempotent (existing tokens are skipped on re-run). Fi
 strict JSON: comments and trailing commas are rejected up front, because a rewrite would silently
 destroy them.
 
+### Hybrid post-quantum key wrapping (.NET 10+)
+
+```bash
+# Generate a recipient key pair (never overwrites existing files). The private key is the
+# sensitive one — store it in a secret manager, never in source control.
+pqc-config keygen --public recipient.pub --private recipient.key
+
+# The PUBLIC key seals (CI can mint tokens it can never read back)…
+pqc-config protect-file --recipient recipient.pub --file appsettings.json --all
+echo 'api-key' | pqc-config protect --recipient recipient.pub
+
+# …the PRIVATE key opens:
+pqc-config unprotect --recipient recipient.key --token pqc.v1.AQ...
+
+# Migrate an existing keyring-sealed file onto hybrid ML-KEM wrapping, atomically:
+pqc-config reprotect-file --keyring keyring.txt --to-recipient recipient.pub --file appsettings.json
+```
+
+Key files are self-describing (`pqc.hybrid.pub.v1.…` / `pqc.hybrid.key.v1.…`): passing the wrong file
+— or a public key where decryption is needed — is a clear, immediate error. Hybrid commands need the
+.NET 10 runtime; elsewhere they fail with an actionable message rather than a missing-command surprise.
+
 Run `pqc-config --help` for the full option list, and see
 [`docs/PQC-MIGRATION.md`](../../docs/PQC-MIGRATION.md) for the end-to-end adoption walkthrough.
 

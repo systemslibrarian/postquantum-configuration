@@ -7,6 +7,37 @@ are **frozen**: breaking either requires a major version, and a wire-format chan
 the token prefix (`pqc.vN.`) so old and new tokens are distinguishable. (During the `0.x` previews,
 minor versions were allowed to break both.)
 
+## [1.2.0] — 2026-07-02
+
+Hybrid post-quantum workflows land in the CLI, plus a fail-closed hardening fix. No `pqc.v1`
+token-format change; the API change is additive-plus-one-contract-fix (below).
+
+### Added
+
+- **`pqc-config keygen`** — generate a hybrid **ML-KEM-768 + ECDH P-256** recipient key pair as two
+  self-describing key files (`pqc.hybrid.pub.v1.…` / `pqc.hybrid.key.v1.…`), so a public key can never
+  be mistaken for a private one, and passing the wrong file is a clear error. Never overwrites existing
+  key material. Prints the recipient fingerprint (`hk-…`) — the same key id `inspect` reports on tokens.
+  Requires the .NET 10 runtime; on older runtimes the command fails with a clear, actionable message.
+- **`--recipient <key file>`** on `protect`, `unprotect`, and `protect-file` — seal against a hybrid
+  recipient instead of the passphrase keyring. The public key seals (wrap-only: CI can mint tokens it
+  can never read back); decrypting requires the private key file, enforced up front with a clear error.
+- **`reprotect-file --to-recipient <public key file>`** — cross-provider migration: re-seal every
+  token in a JSON config file from the current key source onto hybrid post-quantum wrapping in one
+  atomic, all-or-nothing command. This is the "make my existing config post-quantum" operation.
+  Plaintext is handled through the zeroable `Secret` during migration.
+
+### Fixed
+
+- **The throwing `Unprotect` members now honour the opaque-failure contract for every unwrap
+  failure.** A token referencing a key the provider doesn't hold, a different provider family, or a
+  wrap-only (public key) provider used to let the key provider's own exception
+  (`KeyNotFoundException` / `InvalidOperationException`) escape from `Unprotect`, `UnprotectAsync`,
+  and `UnprotectToSecret`, where `ConfigurationProtectionException` is documented — and the raw
+  message distinguished failure modes. All unwrap failures now collapse to the single opaque
+  exception, matching `TryUnprotect` (which was already correct). Locked in by tests in both
+  directions across provider families and for the wrap-only case.
+
 ## [1.1.0] — 2026-07-02
 
 Developer-experience release: whole-file workflows and keyless token inspection. Additive only — no
@@ -160,6 +191,7 @@ First public preview.
   Grover). No asymmetric ML-KEM is shipped. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md).
 - **Not independently audited.** Treat the API and token format as unstable until `1.0`.
 
+[1.2.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.2.0
 [1.1.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.1.0
 [1.0.0]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v1.0.0
 [0.2.0-preview.2]: https://github.com/systemslibrarian/postquantum-configuration/releases/tag/v0.2.0-preview.2

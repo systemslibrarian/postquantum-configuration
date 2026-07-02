@@ -114,6 +114,32 @@ pqc-config inspect --token pqc.v1.AQ...
 In code, the same loop is `ProtectedTokenInfo.TryInspect` to find stale tokens and
 `Reprotect` / `ReprotectAllAsync` to migrate them.
 
+## Adopting hybrid post-quantum key wrapping (.NET 10+)
+
+When you want public-key workflows — CI seals secrets it must never be able to read back, or you want
+the content-key wrapping itself to rest on a post-quantum KEM — move to the hybrid provider. The whole
+lifecycle works from the shell:
+
+```bash
+# One-time: generate a recipient key pair. The private key goes straight into a secret manager.
+pqc-config keygen --public recipient.pub --private recipient.key
+# -> hk-… (the recipient fingerprint; `inspect` shows the same id on every token sealed to it)
+
+# Migrate an existing keyring-sealed file onto hybrid ML-KEM wrapping — one atomic command:
+pqc-config reprotect-file --keyring keyring.txt --to-recipient recipient.pub --file appsettings.json
+
+# From now on, anyone (CI included) can seal with the PUBLIC key…
+pqc-config protect-file --recipient recipient.pub --file appsettings.json --all
+
+# …and only the private-key holder can open:
+pqc-config unprotect --recipient recipient.key --token pqc.v1.…
+```
+
+Key files are self-describing (`pqc.hybrid.pub.v1.…` / `pqc.hybrid.key.v1.…`), so handing the wrong
+file to a command is a clear error — and asking a public key to decrypt fails up front, not at unwrap
+time. In code, the same roles are `HybridKemContentKeyProvider.ImportPublicKey` (seal-only) and
+`ImportPrivateKey` (seal + open).
+
 ## FAQ
 
 **Is my configuration "quantum-safe" after this?**

@@ -135,15 +135,19 @@ internal static class FileProtection
     }
 
     /// <summary>
-    /// Re-seals every protected (<c>pqc.v1.</c>) string leaf in <paramref name="root"/> under the
-    /// provider's current active key. Plaintext values are never touched.
+    /// Re-seals every protected (<c>pqc.v1.</c>) string leaf in <paramref name="root"/>:
+    /// <paramref name="opener"/> decrypts each token and <paramref name="sealer"/> seals it again.
+    /// Pass the same protector for both to migrate onto the active key after a rotation; pass
+    /// different ones to migrate between key providers (for example, keyring → hybrid recipient).
+    /// Plaintext values are never touched, and plaintext is handled via a zeroable <see cref="Secret"/>.
     /// </summary>
     /// <exception cref="ConfigurationProtectionException">
     /// A token is malformed or fails to authenticate — nothing has been written when this throws.
     /// </exception>
     internal static FileProtectionResult Reprotect(
         JsonObject root,
-        IConfigurationProtector? protector,
+        IConfigurationProtector? opener,
+        IConfigurationProtector? sealer,
         bool bindKeyAsContext,
         bool dryRun)
     {
@@ -157,7 +161,14 @@ internal static class FileProtection
             }
 
             changed.Add(key);
-            return dryRun ? null : protector!.Reprotect(value, bindKeyAsContext ? key : null);
+            if (dryRun)
+            {
+                return null;
+            }
+
+            string? context = bindKeyAsContext ? key : null;
+            using Secret secret = opener!.UnprotectToSecret(value, context);
+            return sealer!.Protect(secret.Reveal(), context);
         });
 
         return new FileProtectionResult(changed, AlreadyProtected: 0);
